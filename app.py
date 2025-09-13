@@ -16,8 +16,7 @@ def create_app():
     # Configure Flask to serve the React build from dist/public
     app = Flask(__name__, 
                 static_folder='dist/public', 
-                static_url_path='',
-                template_folder='dist/public')
+                static_url_path='')
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
