@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_restful import Api, Resource
-from flask_login import login_required
+# from flask_login import login_required  # Temporarily disabled for migration
 from datetime import datetime
 
 from models import db, Intersection, Alert, TrafficVolume, MetricSnapshot
@@ -9,7 +9,7 @@ api_bp = Blueprint('api', __name__)
 api = Api(api_bp)
 
 class IntersectionsResource(Resource):
-    @login_required
+    # @login_required  # Temporarily disabled for migration
     def get(self):
         # Mock data for now
         return jsonify([
@@ -52,7 +52,7 @@ class IntersectionsResource(Resource):
         ])
 
 class AlertsResource(Resource):
-    @login_required
+    # @login_required  # Temporarily disabled for migration
     def get(self):
         return jsonify([
             {
@@ -85,7 +85,7 @@ class AlertsResource(Resource):
         ])
 
 class MetricsResource(Resource):
-    @login_required
+    # @login_required  # Temporarily disabled for migration
     def get(self):
         return jsonify({
             "activeIntersections": 12,
@@ -95,7 +95,7 @@ class MetricsResource(Resource):
         })
 
 class TrafficVolumeResource(Resource):
-    @login_required
+    # @login_required  # Temporarily disabled for migration
     def get(self):
         return jsonify([
             {"day": "Mon", "current": 1200, "previous": 1150, "target": 1100},

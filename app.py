@@ -13,7 +13,11 @@ login_manager = LoginManager()
 csrf = CSRFProtect()
 
 def create_app():
-    app = Flask(__name__)
+    # Configure Flask to serve the React build from dist/public
+    app = Flask(__name__, 
+                static_folder='dist/public', 
+                static_url_path='',
+                template_folder='dist/public')
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -30,13 +34,23 @@ def create_app():
     login_manager.login_message = 'Please log in to access this page.'
     
     # Register blueprints
-    from auth import auth_bp
-    from dashboard import dashboard_bp
     from api import api_bp
     
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(dashboard_bp)
+    # Only register the API blueprint - the React frontend will handle routing
     app.register_blueprint(api_bp, url_prefix='/api')
+    
+    # Serve React app for all non-API routes
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_react_app(path):
+        # If it's a static file request, try to serve it
+        if '.' in path:
+            try:
+                return app.send_static_file(path)
+            except:
+                pass
+        # Otherwise serve the React app
+        return app.send_static_file('index.html')
     
     # Create tables
     with app.app_context():
