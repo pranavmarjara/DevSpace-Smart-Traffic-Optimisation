@@ -7,18 +7,24 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import ThemeToggle from "@/components/ThemeToggle";
 import Dashboard from "@/pages/Dashboard";
+import Analytics from "@/pages/Analytics";
+import Monitor from "@/pages/Monitor";
+import Alerts from "@/pages/Alerts";
+import Control from "@/pages/Control";
+import Optimization from "@/pages/Optimization";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/analytics" component={Dashboard} />
-      <Route path="/monitor" component={Dashboard} />
-      <Route path="/alerts" component={Dashboard} />
-      <Route path="/control" component={Dashboard} />
-      <Route path="/optimization" component={Dashboard} />
-      <Route path="/settings" component={Dashboard} />
+      <Route path="/analytics" component={Analytics} />
+      <Route path="/monitor" component={Monitor} />
+      <Route path="/alerts" component={Alerts} />
+      <Route path="/control" component={Control} />
+      <Route path="/optimization" component={Optimization} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
