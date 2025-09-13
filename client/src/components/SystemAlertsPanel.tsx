@@ -10,6 +10,7 @@ import {
   Clock,
   X
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface SystemAlert {
   id: string;
@@ -57,15 +58,26 @@ const alertConfig = {
 export default function SystemAlertsPanel({ alerts, onDismiss, onTakeAction }: SystemAlertsPanelProps) {
   const criticalAlerts = alerts.filter(alert => alert.type === 'critical').length;
   const warningAlerts = alerts.filter(alert => alert.type === 'warning').length;
+  const { toast } = useToast();
 
   const handleDismiss = (alertId: string, alertTitle: string) => {
     onDismiss(alertId);
-    console.log(`Dismissed alert: ${alertTitle}`);
+    
+    toast({
+      title: "Alert Dismissed",
+      description: `"${alertTitle}" has been dismissed and will no longer appear in active alerts.`,
+      className: "border-muted bg-muted/10",
+    });
   };
 
   const handleAction = (alertId: string, alertTitle: string) => {
     onTakeAction(alertId);
-    console.log(`Taking action on alert: ${alertTitle}`);
+    
+    toast({
+      title: "Action Initiated",
+      description: `Action taken for "${alertTitle}". System is processing the resolution.`,
+      className: "border-chart-1 bg-chart-1/10 text-chart-1",
+    });
   };
 
   return (

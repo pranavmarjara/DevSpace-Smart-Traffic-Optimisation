@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Play, Pause, RotateCcw, Settings, Clock, AlertTriangle } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const mockIntersections = [
   { 
@@ -53,36 +54,62 @@ export default function Control() {
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [northSouthTiming, setNorthSouthTiming] = useState([60]);
   const [eastWestTiming, setEastWestTiming] = useState([40]);
+  const [isApplying, setIsApplying] = useState(false);
+  const { toast } = useToast();
 
   const selectedIntersectionData = mockIntersections.find(i => i.id === selectedIntersection);
 
   const handleApplySettings = () => {
-    // In a real app, this would send the settings to the backend
-    console.log('Applying signal settings:', {
-      intersection: selectedIntersection,
-      northSouth: northSouthTiming[0],
-      eastWest: eastWestTiming[0],
-      emergencyMode
-    });
+    setIsApplying(true);
+    
+    // Simulate API call delay
+    setTimeout(() => {
+      setIsApplying(false);
+      
+      toast({
+        title: "Signal Settings Applied",
+        description: `New timing configuration applied to ${selectedIntersectionData?.name}. N-S: ${northSouthTiming[0]}s, E-W: ${eastWestTiming[0]}s`,
+        className: "border-chart-1 bg-chart-1/10 text-chart-1",
+      });
+    }, 1000);
   };
 
   const handleResetToAI = () => {
     if (selectedIntersectionData) {
       setNorthSouthTiming([selectedIntersectionData.aiRecommendation.northSouth]);
       setEastWestTiming([selectedIntersectionData.aiRecommendation.eastWest]);
+      
+      toast({
+        title: "Reset to AI Recommendations",
+        description: `Signal timing reset to AI-optimized values for ${selectedIntersectionData.name}.`,
+        className: "border-chart-2 bg-chart-2/10 text-chart-2",
+      });
     }
   };
 
   const handleEmergencyMode = () => {
-    setEmergencyMode(!emergencyMode);
-    if (!emergencyMode) {
+    const newEmergencyMode = !emergencyMode;
+    setEmergencyMode(newEmergencyMode);
+    
+    if (newEmergencyMode) {
       // Set emergency timings
       setNorthSouthTiming([90]);
       setEastWestTiming([30]);
     } else {
       // Reset to AI recommendations
-      handleResetToAI();
+      if (selectedIntersectionData) {
+        setNorthSouthTiming([selectedIntersectionData.aiRecommendation.northSouth]);
+        setEastWestTiming([selectedIntersectionData.aiRecommendation.eastWest]);
+      }
     }
+    
+    toast({
+      title: newEmergencyMode ? "Emergency Mode Activated" : "Emergency Mode Deactivated",
+      description: newEmergencyMode 
+        ? "All intersections now prioritize emergency vehicle access with extended N-S timing."
+        : "Normal traffic optimization restored.",
+      variant: newEmergencyMode ? "destructive" : "default",
+    });
   };
 
   return (
@@ -227,9 +254,12 @@ export default function Control() {
 
                       {/* Control Buttons */}
                       <div className="flex gap-2">
-                        <Button onClick={handleApplySettings} disabled={!manualControl && !emergencyMode}>
-                          <Play className="h-4 w-4 mr-2" />
-                          Apply Settings
+                        <Button 
+                          onClick={handleApplySettings} 
+                          disabled={(!manualControl && !emergencyMode) || isApplying}
+                        >
+                          <Play className={`h-4 w-4 mr-2 ${isApplying ? 'animate-spin' : ''}`} />
+                          {isApplying ? 'Applying...' : 'Apply Settings'}
                         </Button>
                         <Button variant="outline" onClick={handleResetToAI}>
                           <RotateCcw className="h-4 w-4 mr-2" />

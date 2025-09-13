@@ -12,6 +12,7 @@ import {
   Zap
 } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface TrafficIntersectionCardProps {
   intersection: {
@@ -58,17 +59,37 @@ export default function TrafficIntersectionCard({ intersection }: TrafficInterse
   const [signalTimings, setSignalTimings] = useState(intersection.signalTimings);
   const [emergencyMode, setEmergencyMode] = useState(intersection.emergencyMode);
   const [showControls, setShowControls] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const { toast } = useToast();
   
   const status = statusConfig[intersection.status];
 
-  const handleApplyAIRecommendation = () => {
-    setSignalTimings(intersection.aiRecommendation);
-    console.log(`Applied AI recommendation for ${intersection.name}:`, intersection.aiRecommendation);
+  const handleApplyAIRecommendation = async () => {
+    setIsOptimizing(true);
+    
+    // Simulate API call delay
+    setTimeout(() => {
+      setSignalTimings(intersection.aiRecommendation);
+      setIsOptimizing(false);
+      
+      toast({
+        title: "AI Optimization Applied",
+        description: `Signal timing optimized at ${intersection.name}. Expected wait time reduction: 15-20%.`,
+        className: "border-chart-1 bg-chart-1/10 text-chart-1",
+      });
+    }, 1500);
   };
 
   const handleEmergencyToggle = (checked: boolean) => {
     setEmergencyMode(checked);
-    console.log(`Emergency mode ${checked ? 'enabled' : 'disabled'} for ${intersection.name}`);
+    
+    toast({
+      title: checked ? "Emergency Mode Activated" : "Emergency Mode Deactivated",
+      description: checked 
+        ? `Emergency protocols activated at ${intersection.name}. All signals prioritized for emergency vehicles.`
+        : `Normal operation restored at ${intersection.name}.`,
+      variant: checked ? "destructive" : "default",
+    });
   };
 
   const handleSignalUpdate = (direction: 'northSouth' | 'eastWest', value: number[]) => {
@@ -138,10 +159,11 @@ export default function TrafficIntersectionCard({ intersection }: TrafficInterse
             size="sm" 
             variant="default"
             onClick={handleApplyAIRecommendation}
+            disabled={isOptimizing}
             data-testid={`button-ai-optimize-${intersection.id}`}
           >
-            <Zap className="h-4 w-4 mr-1" />
-            AI Optimize
+            <Zap className={`h-4 w-4 mr-1 ${isOptimizing ? 'animate-spin' : ''}`} />
+            {isOptimizing ? 'Optimizing...' : 'AI Optimize'}
           </Button>
         </div>
 

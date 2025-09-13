@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Zap, TrendingUp, Brain, Target, Clock, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const mockIntersections = [
   { 
@@ -87,19 +88,45 @@ const aiRecommendations = [
 export default function Optimization() {
   const [recommendations, setRecommendations] = useState(aiRecommendations);
   const [autoOptimization, setAutoOptimization] = useState(false);
+  const { toast } = useToast();
 
   const handleApplyRecommendation = (id: string) => {
+    const recommendation = recommendations.find(rec => rec.id === id);
     setRecommendations(recommendations.map(rec => 
       rec.id === id ? { ...rec, status: 'applied' as const } : rec
     ));
+    
+    if (recommendation) {
+      toast({
+        title: "AI Recommendation Applied",
+        description: `${recommendation.recommendation} has been implemented at ${recommendation.intersection}.`,
+        className: "border-chart-1 bg-chart-1/10 text-chart-1",
+      });
+    }
   };
 
   const handleRejectRecommendation = (id: string) => {
+    const recommendation = recommendations.find(rec => rec.id === id);
     setRecommendations(recommendations.filter(rec => rec.id !== id));
+    
+    if (recommendation) {
+      toast({
+        title: "Recommendation Rejected",
+        description: `AI recommendation for ${recommendation.intersection} has been dismissed.`,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleApplyAllRecommendations = () => {
+    const pendingCount = recommendations.filter(r => r.status === 'pending').length;
     setRecommendations(recommendations.map(rec => ({ ...rec, status: 'applied' as const })));
+    
+    toast({
+      title: "All Recommendations Applied",
+      description: `${pendingCount} AI recommendations have been implemented across the network.`,
+      className: "border-chart-1 bg-chart-1/10 text-chart-1",
+    });
   };
 
   const pendingCount = recommendations.filter(r => r.status === 'pending').length;
