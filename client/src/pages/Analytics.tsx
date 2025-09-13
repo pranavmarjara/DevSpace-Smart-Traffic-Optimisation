@@ -1,6 +1,6 @@
 import AnalyticsChart from "@/components/AnalyticsChart";
-import PerformanceMetricsCard, { Clock, Route, AlertCircle } from "@/components/PerformanceMetricsCard";
-import { TrendingUp } from "lucide-react";
+import PerformanceMetricsCard from "@/components/PerformanceMetricsCard";
+import { TrendingUp, Clock, Route, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
