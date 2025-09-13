@@ -51,7 +51,8 @@ def register():
             flash('Username already exists')
             return render_template('auth/register.html', form=form)
         
-        user = User(username=form.username.data)
+        user = User()
+        user.username = form.username.data
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
