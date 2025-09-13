@@ -52,10 +52,6 @@ def create_app():
         # Otherwise serve the React app
         return app.send_static_file('index.html')
     
-    # Create tables
-    with app.app_context():
-        db.create_all()
-    
     return app
 
 if __name__ == '__main__':
