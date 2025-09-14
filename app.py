@@ -35,6 +35,9 @@ def create_app():
     # Register blueprints
     from api import api_bp
     
+    # Exempt API blueprint from CSRF protection for JSON API calls
+    csrf.exempt(api_bp)
+    
     # Only register the API blueprint - the React frontend will handle routing
     app.register_blueprint(api_bp, url_prefix='/api')
     
