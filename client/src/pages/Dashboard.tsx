@@ -1,8 +1,9 @@
 import TrafficIntersectionCard from "@/components/TrafficIntersectionCard";
-import PerformanceMetricsCard, { Clock, Route, AlertCircle } from "@/components/PerformanceMetricsCard";
-import TrafficMapVisualization from "@/components/TrafficMapVisualization";
-import SystemAlertsPanel from "@/components/SystemAlertsPanel";
-import AnalyticsChart from "@/components/AnalyticsChart";
+import PerformanceMetricsWrapper from "@/components/PerformanceMetricsWrapper";
+import TrafficMapWrapper from "@/components/TrafficMapWrapper";
+import SystemAlertsPanelWrapper from "@/components/SystemAlertsPanelWrapper";
+import AnalyticsChartWrapper from "@/components/AnalyticsChartWrapper";
+import { Clock, Route, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 
 // TODO: remove mock functionality
@@ -171,41 +172,40 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Performance Metrics */}
+      {/* Performance Metrics - Hybrid Web Components */}
       <div className="grid gap-4 md:grid-cols-3">
         {mockMetrics.map((metric, index) => (
-          <PerformanceMetricsCard
+          <PerformanceMetricsWrapper
             key={index}
             title={metric.title}
             value={metric.value}
             change={metric.change}
             changeLabel={metric.changeLabel}
             description={metric.description}
-            icon={metric.icon}
             target={metric.target}
           />
         ))}
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Content Grid - Hybrid Web Components */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Traffic Map - Takes 2 columns */}
-        <TrafficMapVisualization 
+        <TrafficMapWrapper 
           intersections={mockMapIntersections}
           selectedIntersection={selectedIntersection}
           onIntersectionSelect={setSelectedIntersection}
         />
 
         {/* System Alerts - Takes 1 column */}
-        <SystemAlertsPanel 
+        <SystemAlertsPanelWrapper 
           alerts={alerts}
           onDismiss={handleDismissAlert}
           onTakeAction={handleTakeAction}
         />
       </div>
 
-      {/* Analytics Chart */}
-      <AnalyticsChart
+      {/* Analytics Chart - Hybrid Web Component */}
+      <AnalyticsChartWrapper
         title="Weekly Traffic Volume Analysis"
         data={trafficVolumeData}
         type="bar"

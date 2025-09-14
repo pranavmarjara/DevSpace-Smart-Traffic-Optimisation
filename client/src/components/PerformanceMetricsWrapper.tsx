@@ -21,16 +21,29 @@ export default function PerformanceMetricsWrapper({
   const metricsRef = useRef<any>(null);
 
   useEffect(() => {
-    if (metricsRef.current) {
-      metricsRef.current.setProps({
-        title,
-        value,
-        change,
-        changeLabel,
-        description,
-        target
-      });
-    }
+    const el = metricsRef.current;
+    if (!el) return;
+    
+    let cancelled = false;
+    
+    (async () => {
+      await customElements.whenDefined('performance-metrics');
+      if (cancelled) return;
+      
+      if (typeof (el as any).setProps === 'function') {
+        (el as any).setProps({ title, value, change, changeLabel, description, target });
+      } else {
+        // Fallback to attributes
+        el.setAttribute('title', title);
+        el.setAttribute('value', value);
+        el.setAttribute('change', String(change));
+        el.setAttribute('change-label', changeLabel);
+        el.setAttribute('description', description);
+        if (target) el.setAttribute('target', target);
+      }
+    })();
+    
+    return () => { cancelled = true; };
   }, [title, value, change, changeLabel, description, target]);
 
   return (

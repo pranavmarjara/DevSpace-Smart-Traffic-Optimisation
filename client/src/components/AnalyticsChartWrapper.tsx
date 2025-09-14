@@ -20,16 +20,29 @@ export default function AnalyticsChartWrapper({
   const chartRef = useRef<any>(null);
 
   useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.setProps({
-        title,
-        data,
-        type,
-        timeframe,
-        improvement,
-        unit
-      });
-    }
+    const el = chartRef.current;
+    if (!el) return;
+    
+    let cancelled = false;
+    
+    (async () => {
+      await customElements.whenDefined('analytics-chart');
+      if (cancelled) return;
+      
+      if (typeof (el as any).setProps === 'function') {
+        (el as any).setProps({ title, data, type, timeframe, improvement, unit });
+      } else {
+        // Fallback to attributes
+        el.setAttribute('title', title);
+        el.setAttribute('type', type);
+        el.setAttribute('timeframe', timeframe);
+        el.setAttribute('improvement', String(improvement));
+        el.setAttribute('unit', unit);
+        el.setAttribute('data', JSON.stringify(data));
+      }
+    })();
+    
+    return () => { cancelled = true; };
   }, [title, data, type, timeframe, improvement, unit]);
 
   return (
