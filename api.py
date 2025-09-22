@@ -185,27 +185,50 @@ class TrainResource(Resource):
     """Training endpoint to trigger DQN training."""
     
     def post(self):
-        """Trigger DQN training and return progress logs as plain text."""
+        """Trigger DQN training and stream JSON progress updates."""
         try:
-            from train_dqn import train_dqn_agent
-            import sys
-            from io import StringIO
+            from train_dqn import train_dqn_agent_generator
+            import json
+            from flask import Response
             
-            # Capture training output
-            old_stdout = sys.stdout
-            sys.stdout = captured_output = StringIO()
+            def generate_training_updates():
+                """Generator function that yields JSON progress updates."""
+                try:
+                    for progress_data in train_dqn_agent_generator(episodes=500):
+                        # Convert to JSON and add newline for streaming
+                        json_data = json.dumps(progress_data) + '\n'
+                        yield f"data: {json_data}"
+                        
+                        # Add a small delay to ensure proper streaming
+                        import time
+                        time.sleep(0.1)
+                        
+                except Exception as e:
+                    error_data = {
+                        'error': True,
+                        'message': f"Training failed: {str(e)}",
+                        'completed': True
+                    }
+                    yield f"data: {json.dumps(error_data)}\n"
             
-            try:
-                # Train the agent
-                train_dqn_agent(episodes=500)
-                training_log = captured_output.getvalue()
-            finally:
-                sys.stdout = old_stdout
-            
-            return training_log, 200, {'Content-Type': 'text/plain'}
+            return Response(
+                generate_training_updates(),
+                mimetype='text/plain',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'X-Accel-Buffering': 'no'  # Disable nginx buffering
+                }
+            )
             
         except Exception as e:
-            return f"Training failed: {str(e)}", 500, {'Content-Type': 'text/plain'}
+            import json
+            error_response = {
+                'error': True,
+                'message': f"Training failed: {str(e)}",
+                'completed': True
+            }
+            return json.dumps(error_response), 500, {'Content-Type': 'application/json'}
 
 # Register the endpoints
 api.add_resource(SimulateResource, '/simulate')
