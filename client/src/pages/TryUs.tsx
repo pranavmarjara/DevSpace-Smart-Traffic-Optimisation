@@ -9,6 +9,70 @@ import { Play, Zap, BarChart3, Loader2, Brain, Settings, Database, CheckCircle2 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import AnimatedIntersection from "@/components/AnimatedIntersection";
 
+// Predefined traffic scenario for fair comparison
+interface VehicleSpawnEvent {
+  time: number;
+  direction: 'north' | 'south' | 'east' | 'west';
+  color: string;
+  speed: number;
+}
+
+const createTrafficScenario = (): VehicleSpawnEvent[] => {
+  const scenario: VehicleSpawnEvent[] = [];
+  const colors = ['#ef4444', '#3b82f6', '#eab308', '#10b981', '#8b5cf6'];
+  
+  // Rush hour scenario: Heavy north-south traffic with moderate east-west
+  const events = [
+    // Time 0-10s: Light traffic
+    { time: 2, direction: 'north', color: colors[0], speed: 1.2 },
+    { time: 4, direction: 'east', color: colors[1], speed: 1.1 },
+    { time: 6, direction: 'south', color: colors[2], speed: 1.3 },
+    { time: 8, direction: 'west', color: colors[3], speed: 1.0 },
+    
+    // Time 10-20s: Building up traffic
+    { time: 10, direction: 'north', color: colors[4], speed: 1.1 },
+    { time: 12, direction: 'north', color: colors[0], speed: 1.2 },
+    { time: 14, direction: 'south', color: colors[1], speed: 1.3 },
+    { time: 16, direction: 'east', color: colors[2], speed: 1.0 },
+    { time: 18, direction: 'south', color: colors[3], speed: 1.1 },
+    
+    // Time 20-40s: Rush hour peak - heavy north-south traffic
+    { time: 20, direction: 'north', color: colors[4], speed: 1.0 },
+    { time: 22, direction: 'north', color: colors[0], speed: 1.1 },
+    { time: 24, direction: 'south', color: colors[1], speed: 1.2 },
+    { time: 25, direction: 'north', color: colors[2], speed: 1.0 },
+    { time: 27, direction: 'south', color: colors[3], speed: 1.3 },
+    { time: 29, direction: 'north', color: colors[4], speed: 1.1 },
+    { time: 30, direction: 'west', color: colors[0], speed: 1.0 },
+    { time: 32, direction: 'south', color: colors[1], speed: 1.2 },
+    { time: 34, direction: 'north', color: colors[2], speed: 1.0 },
+    { time: 36, direction: 'east', color: colors[3], speed: 1.1 },
+    { time: 38, direction: 'south', color: colors[4], speed: 1.3 },
+    
+    // Time 40-60s: Continued heavy traffic
+    { time: 40, direction: 'north', color: colors[0], speed: 1.1 },
+    { time: 42, direction: 'north', color: colors[1], speed: 1.0 },
+    { time: 44, direction: 'south', color: colors[2], speed: 1.2 },
+    { time: 46, direction: 'west', color: colors[3], speed: 1.1 },
+    { time: 48, direction: 'north', color: colors[4], speed: 1.0 },
+    { time: 50, direction: 'south', color: colors[0], speed: 1.3 },
+    { time: 52, direction: 'east', color: colors[1], speed: 1.1 },
+    { time: 54, direction: 'north', color: colors[2], speed: 1.0 },
+    { time: 56, direction: 'south', color: colors[3], speed: 1.2 },
+    { time: 58, direction: 'north', color: colors[4], speed: 1.1 },
+    
+    // Time 60-80s: Gradual decrease
+    { time: 62, direction: 'south', color: colors[0], speed: 1.2 },
+    { time: 65, direction: 'west', color: colors[1], speed: 1.0 },
+    { time: 68, direction: 'north', color: colors[2], speed: 1.1 },
+    { time: 72, direction: 'east', color: colors[3], speed: 1.2 },
+    { time: 75, direction: 'south', color: colors[4], speed: 1.0 },
+    { time: 78, direction: 'north', color: colors[0], speed: 1.1 }
+  ];
+  
+  return events as VehicleSpawnEvent[];
+};
+
 interface SimulationMetrics {
   mode: string;
   total_steps: number;
@@ -71,6 +135,12 @@ export default function TryUs() {
     hardcoded: { playing: false, frame: 0, cars: [] },
     optimized: { playing: false, frame: 0, cars: [] }
   });
+  
+  // Synchronized traffic simulation state
+  const [trafficScenario] = useState<VehicleSpawnEvent[]>(createTrafficScenario());
+  const [simulationTime, setSimulationTime] = useState(0);
+  const [isRunningDemo, setIsRunningDemo] = useState(false);
+  const simulationTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Training state management
   const [isTraining, setIsTraining] = useState(false);
@@ -202,6 +272,49 @@ export default function TryUs() {
       runSimulation('optimized')
     ]);
   };
+  
+  // Start synchronized demo
+  const startSynchronizedDemo = () => {
+    if (isRunningDemo) {
+      // Stop current demo
+      if (simulationTimerRef.current) {
+        clearInterval(simulationTimerRef.current);
+        simulationTimerRef.current = null;
+      }
+      setIsRunningDemo(false);
+      setSimulationTime(0);
+    } else {
+      // Start new demo
+      setIsRunningDemo(true);
+      setSimulationTime(0);
+      
+      // Run simulation timer
+      simulationTimerRef.current = setInterval(() => {
+        setSimulationTime(prev => {
+          const newTime = prev + 1;
+          // Stop at 90 seconds
+          if (newTime >= 90) {
+            if (simulationTimerRef.current) {
+              clearInterval(simulationTimerRef.current);
+              simulationTimerRef.current = null;
+            }
+            setIsRunningDemo(false);
+            return 90;
+          }
+          return newTime;
+        });
+      }, 1000); // Update every second
+    }
+  };
+  
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (simulationTimerRef.current) {
+        clearInterval(simulationTimerRef.current);
+      }
+    };
+  }, []);
 
   const runTraining = async () => {
     setIsTraining(true);
@@ -795,12 +908,31 @@ export default function TryUs() {
         
         <Button
           onClick={runComparison}
-          disabled={isTraining || isSimulating.hardcoded || isSimulating.optimized}
+          disabled={isTraining || isSimulating.hardcoded || isSimulating.optimized || isRunningDemo}
           variant="default"
           size="lg"
         >
           <BarChart3 className="w-4 h-4 mr-2" />
           Compare
+        </Button>
+        
+        <Button
+          onClick={startSynchronizedDemo}
+          disabled={isTraining || isSimulating.hardcoded || isSimulating.optimized}
+          variant={isRunningDemo ? "destructive" : "secondary"}
+          size="lg"
+        >
+          {isRunningDemo ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Stop Demo ({simulationTime}s)
+            </>
+          ) : (
+            <>
+              <Play className="w-4 h-4 mr-2" />
+              Synchronized Demo
+            </>
+          )}
         </Button>
       </div>
 
@@ -961,6 +1093,9 @@ export default function TryUs() {
                 }
               }}
               className="border-2 border-orange-200"
+              vehicleSpawnEvents={trafficScenario}
+              simulationTime={simulationTime}
+              useRandomSpawning={!isRunningDemo}
             />
             {isSimulating.hardcoded && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
@@ -1031,6 +1166,9 @@ export default function TryUs() {
                 }
               }}
               className="border-2 border-green-200"
+              vehicleSpawnEvents={trafficScenario}
+              simulationTime={simulationTime}
+              useRandomSpawning={!isRunningDemo}
             />
             {isSimulating.optimized && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
