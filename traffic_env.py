@@ -150,22 +150,59 @@ class IntersectionEnv:
     
     def render_frame(self) -> Dict[str, Any]:
         """Generate a frame for visualization."""
+        cars = []
+        
+        # Generate car positions based on queue lengths
+        # Intersection center is at (0.5, 0.5)
+        center_x, center_y = 0.5, 0.5
+        car_spacing = 0.04
+        
+        # North queue (cars moving south, positioned above intersection)
+        for i in range(len(self.queues['north'])):
+            cars.append({
+                'x': center_x,
+                'y': center_y - 0.1 - (i * car_spacing),
+                'color': '#3b82f6'  # Blue
+            })
+        
+        # South queue (cars moving north, positioned below intersection)
+        for i in range(len(self.queues['south'])):
+            cars.append({
+                'x': center_x,
+                'y': center_y + 0.1 + (i * car_spacing),
+                'color': '#3b82f6'  # Blue
+            })
+        
+        # East queue (cars moving west, positioned right of intersection)
+        for i in range(len(self.queues['east'])):
+            cars.append({
+                'x': center_x + 0.1 + (i * car_spacing),
+                'y': center_y,
+                'color': '#3b82f6'  # Blue
+            })
+        
+        # West queue (cars moving east, positioned left of intersection)
+        for i in range(len(self.queues['west'])):
+            cars.append({
+                'x': center_x - 0.1 - (i * car_spacing),
+                'y': center_y,
+                'color': '#3b82f6'  # Blue
+            })
+        
         return {
-            'queues': {
-                'north': len(self.queues['north']),
-                'south': len(self.queues['south']),
-                'east': len(self.queues['east']),
-                'west': len(self.queues['west'])
-            },
+            'cars': cars,
             'lights': {
-                'ns': 'green' if self.light_state['ns'] == 1 else 'red',
-                'ew': 'green' if self.light_state['ew'] == 1 else 'red'
+                'N': 'green' if self.light_state['ns'] == 1 else 'red',
+                'S': 'green' if self.light_state['ns'] == 1 else 'red',
+                'E': 'green' if self.light_state['ew'] == 1 else 'red',
+                'W': 'green' if self.light_state['ew'] == 1 else 'red'
             },
             'metrics': {
                 'cars_processed': self.cars_processed,
                 'avg_waiting_time': self.total_waiting_time / max(1, self.cars_processed),
                 'avg_queue_length': self.avg_queue_length,
-                'total_cars': sum(len(self.queues[direction]) for direction in self.directions)
+                'total_cars': sum(len(self.queues[direction]) for direction in self.directions),
+                'time_wasted': self.total_waiting_time
             },
             'step': self.step_count
         }

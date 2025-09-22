@@ -14,22 +14,26 @@ interface SimulationMetrics {
   efficiency_score: number;
 }
 
+interface Car {
+  x: number;
+  y: number;
+  color: string;
+}
+
 interface SimulationFrame {
-  queues: {
-    north: number;
-    south: number;
-    east: number;
-    west: number;
-  };
+  cars: Car[];
   lights: {
-    ns: string;
-    ew: string;
+    N: string;
+    S: string;
+    E: string;
+    W: string;
   };
   metrics: {
     cars_processed: number;
     avg_waiting_time: number;
     avg_queue_length: number;
     total_cars: number;
+    time_wasted: number;
   };
   step: number;
 }
@@ -104,89 +108,138 @@ export default function TryUs() {
     if (!ctx) return;
 
     let frameIndex = 0;
+    const fps = 5; // ~5 FPS as requested
+    const interval = 1000 / fps;
+    let lastTime = 0;
     
-    const animate = () => {
-      if (frameIndex >= frames.length) {
-        setIsPlaying(false);
-        return;
-      }
+    const animate = (currentTime: number) => {
+      if (currentTime - lastTime >= interval) {
+        if (frameIndex >= frames.length) {
+          setIsPlaying(false);
+          return;
+        }
 
-      const frame = frames[frameIndex];
-      drawFrame(ctx, frame, canvas.width, canvas.height);
-      setCurrentFrame(frameIndex);
-      frameIndex++;
+        const frame = frames[frameIndex];
+        drawFrame(ctx, frame, canvas.width, canvas.height);
+        setCurrentFrame(frameIndex);
+        frameIndex++;
+        lastTime = currentTime;
+      }
       
       if (isPlaying) {
-        setTimeout(() => requestAnimationFrame(animate), 100);
+        requestAnimationFrame(animate);
       }
     };
     
-    animate();
+    requestAnimationFrame(animate);
   };
 
   const drawFrame = (ctx: CanvasRenderingContext2D, frame: SimulationFrame, width: number, height: number) => {
-    // Clear canvas
+    // Clear canvas with dark background
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, width, height);
     
-    // Draw intersection
+    // Draw road background - two vertical + two horizontal roads
+    const roadWidth = 60;
     const centerX = width / 2;
     const centerY = height / 2;
-    const roadWidth = 40;
     
-    // Draw roads
     ctx.fillStyle = '#404040';
-    // Horizontal road
+    
+    // Horizontal road (east-west)
     ctx.fillRect(0, centerY - roadWidth/2, width, roadWidth);
-    // Vertical road  
+    
+    // Vertical road (north-south)  
     ctx.fillRect(centerX - roadWidth/2, 0, roadWidth, height);
     
-    // Draw traffic lights
-    const lightSize = 12;
-    // NS lights
-    ctx.fillStyle = frame.lights.ns === 'green' ? '#22c55e' : '#ef4444';
-    ctx.fillRect(centerX - lightSize/2, centerY - roadWidth/2 - lightSize - 5, lightSize, lightSize);
-    ctx.fillRect(centerX - lightSize/2, centerY + roadWidth/2 + 5, lightSize, lightSize);
+    // Draw intersection center slightly darker
+    ctx.fillStyle = '#353535';
+    ctx.fillRect(centerX - roadWidth/2, centerY - roadWidth/2, roadWidth, roadWidth);
     
-    // EW lights
-    ctx.fillStyle = frame.lights.ew === 'green' ? '#22c55e' : '#ef4444';
-    ctx.fillRect(centerX - roadWidth/2 - lightSize - 5, centerY - lightSize/2, lightSize, lightSize);
-    ctx.fillRect(centerX + roadWidth/2 + 5, centerY - lightSize/2, lightSize, lightSize);
+    // Draw lane dividers
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
     
-    // Draw car queues
-    const carSize = 6;
-    const spacing = 8;
+    // Horizontal lane divider
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(centerX - roadWidth/2, centerY);
+    ctx.moveTo(centerX + roadWidth/2, centerY);
+    ctx.lineTo(width, centerY);
+    ctx.stroke();
     
-    // North queue
-    for (let i = 0; i < frame.queues.north; i++) {
-      ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(centerX - carSize/2, centerY - roadWidth/2 - spacing * (i + 2), carSize, carSize);
-    }
+    // Vertical lane divider
+    ctx.beginPath();
+    ctx.moveTo(centerX, 0);
+    ctx.lineTo(centerX, centerY - roadWidth/2);
+    ctx.moveTo(centerX, centerY + roadWidth/2);
+    ctx.lineTo(centerX, height);
+    ctx.stroke();
     
-    // South queue
-    for (let i = 0; i < frame.queues.south; i++) {
-      ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(centerX - carSize/2, centerY + roadWidth/2 + spacing * (i + 2), carSize, carSize);
-    }
+    ctx.setLineDash([]);
     
-    // East queue
-    for (let i = 0; i < frame.queues.east; i++) {
-      ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(centerX + roadWidth/2 + spacing * (i + 2), centerY - carSize/2, carSize, carSize);
-    }
+    // Draw cars using normalized positions (0-1) scaled to canvas dimensions
+    frame.cars.forEach(car => {
+      const carX = car.x * width;
+      const carY = car.y * height;
+      const carSize = 8;
+      
+      ctx.fillStyle = car.color;
+      ctx.beginPath();
+      ctx.arc(carX, carY, carSize / 2, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // Add a subtle border
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
     
-    // West queue
-    for (let i = 0; i < frame.queues.west; i++) {
-      ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(centerX - roadWidth/2 - spacing * (i + 2), centerY - carSize/2, carSize, carSize);
-    }
+    // Draw traffic lights as colored circles near intersection
+    const lightRadius = 8;
+    const lightOffset = roadWidth/2 + 15;
     
-    // Draw step counter
+    // North light
+    ctx.fillStyle = frame.lights.N === 'green' ? '#22c55e' : '#ef4444';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY - lightOffset, lightRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // South light
+    ctx.fillStyle = frame.lights.S === 'green' ? '#22c55e' : '#ef4444';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY + lightOffset, lightRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+    
+    // East light
+    ctx.fillStyle = frame.lights.E === 'green' ? '#22c55e' : '#ef4444';
+    ctx.beginPath();
+    ctx.arc(centerX + lightOffset, centerY, lightRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+    
+    // West light
+    ctx.fillStyle = frame.lights.W === 'green' ? '#22c55e' : '#ef4444';
+    ctx.beginPath();
+    ctx.arc(centerX - lightOffset, centerY, lightRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw simulation info
     ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(`Step: ${frame.step}`, 20, 30);
+    
     ctx.font = '14px sans-serif';
-    ctx.fillText(`Step: ${frame.step}`, 10, 25);
-    ctx.fillText(`Cars Processed: ${frame.metrics.cars_processed}`, 10, 45);
-    ctx.fillText(`Avg Wait: ${frame.metrics.avg_waiting_time.toFixed(1)}s`, 10, 65);
+    ctx.fillText(`Cars: ${frame.metrics.total_cars}`, 20, 55);
+    ctx.fillText(`Processed: ${frame.metrics.cars_processed}`, 20, 75);
+    ctx.fillText(`Avg Wait: ${frame.metrics.avg_waiting_time.toFixed(1)}s`, 20, 95);
+    ctx.fillText(`Time Wasted: ${frame.metrics.time_wasted.toFixed(1)}s`, 20, 115);
   };
 
   useEffect(() => {
@@ -196,9 +249,9 @@ export default function TryUs() {
       if (ctx) {
         // Initial empty intersection
         drawFrame(ctx, {
-          queues: { north: 0, south: 0, east: 0, west: 0 },
-          lights: { ns: 'green', ew: 'red' },
-          metrics: { cars_processed: 0, avg_waiting_time: 0, avg_queue_length: 0, total_cars: 0 },
+          cars: [],
+          lights: { N: 'green', S: 'green', E: 'red', W: 'red' },
+          metrics: { cars_processed: 0, avg_waiting_time: 0, avg_queue_length: 0, total_cars: 0, time_wasted: 0 },
           step: 0
         }, canvas.width, canvas.height);
       }
@@ -229,10 +282,10 @@ export default function TryUs() {
             <div className="relative">
               <canvas
                 ref={canvasRef}
-                width={400}
-                height={300}
-                className="border rounded-lg bg-gray-900 w-full"
-                style={{ maxWidth: '400px', height: 'auto' }}
+                width={800}
+                height={500}
+                className="border rounded-lg bg-gray-900 w-full h-auto"
+                style={{ width: '100%', height: 'auto' }}
               />
               {isSimulating && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
@@ -307,29 +360,46 @@ export default function TryUs() {
                     </Badge>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="space-y-1">
-                      <div className="font-medium">Cars Processed</div>
+                      <div className="font-medium text-muted-foreground">Cars Processed</div>
                       <div className="text-2xl font-bold text-green-600">
                         {result.metrics.cars_processed}
                       </div>
                     </div>
                     
                     <div className="space-y-1">
-                      <div className="font-medium">Efficiency Score</div>
+                      <div className="font-medium text-muted-foreground">Efficiency Score</div>
                       <div className="text-2xl font-bold text-blue-600">
                         {result.metrics.efficiency_score.toFixed(1)}%
                       </div>
                     </div>
                     
                     <div className="space-y-1">
-                      <div className="font-medium">Avg Wait Time</div>
-                      <div className="text-lg">{result.metrics.avg_waiting_time.toFixed(1)}s</div>
+                      <div className="font-medium text-muted-foreground">Time Wasted</div>
+                      <div className={`text-xl font-bold ${
+                        mode === 'optimized' ? 'text-green-500' : 'text-orange-500'
+                      }`}>
+                        {result.frames.length > 0 
+                          ? result.frames[result.frames.length - 1].metrics.time_wasted.toFixed(1) + 's'
+                          : '0s'
+                        }
+                      </div>
                     </div>
                     
                     <div className="space-y-1">
-                      <div className="font-medium">Avg Queue Length</div>
-                      <div className="text-lg">{result.metrics.avg_queue_length.toFixed(1)}</div>
+                      <div className="font-medium text-muted-foreground">Avg Wait Time</div>
+                      <div className="text-lg font-semibold">{result.metrics.avg_waiting_time.toFixed(1)}s</div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="font-medium text-muted-foreground">Avg Queue Length</div>
+                      <div className="text-lg font-semibold">{result.metrics.avg_queue_length.toFixed(1)}</div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="font-medium text-muted-foreground">Total Cars</div>
+                      <div className="text-lg font-semibold">{result.metrics.avg_total_cars.toFixed(1)}</div>
                     </div>
                   </div>
                 </div>

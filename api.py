@@ -143,7 +143,7 @@ class SimulateResource(Resource):
             # Calculate summary metrics
             if frames:
                 final_metrics = frames[-1]['metrics']
-                total_cars = sum(frame['queues'][direction] for frame in frames for direction in ['north', 'south', 'east', 'west'])
+                total_cars = sum(len(frame['cars']) for frame in frames)
                 avg_total_cars = total_cars / len(frames) if frames else 0
                 
                 summary_metrics = {
