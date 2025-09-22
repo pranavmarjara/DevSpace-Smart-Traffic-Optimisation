@@ -294,18 +294,7 @@ export default function TryUs() {
       // Run simulation timer
       simulationTimerRef.current = setInterval(() => {
         setSimulationTime(prev => {
-          const newTime = prev + 0.1; // Update every 100ms for smoother timing
-          // Stop at 10 seconds
-          if (newTime >= 10) {
-            if (simulationTimerRef.current) {
-              clearInterval(simulationTimerRef.current);
-              simulationTimerRef.current = null;
-            }
-            setIsRunningDemo(false);
-            setDemoKey(prev => prev + 1); // Clear vehicles when demo completes
-            return 10;
-          }
-          return newTime;
+          return prev + 0.1; // Update every 100ms for smoother timing
         });
       }, 100); // Update every 100ms for smoother animation
     }
