@@ -111,13 +111,14 @@ class DQNAgent:
         return False
 
 
-def train_dqn_agent(episodes: int = 500):
+def train_dqn_agent(episodes: int = 500, progress_callback=None):
     """Train the DQN agent on the traffic environment."""
     env = IntersectionEnv()
     agent = DQNAgent(env.state_space_size, env.action_space_size)
     
     scores = deque(maxlen=100)
     losses = deque(maxlen=100)
+    episode_rewards = []  # Track all episode rewards for charting
     
     for episode in range(episodes):
         state = env.reset()
@@ -134,6 +135,7 @@ def train_dqn_agent(episodes: int = 500):
                 break
                 
         scores.append(total_reward)
+        episode_rewards.append(total_reward)
         loss = agent.replay()
         if loss:
             losses.append(loss)
@@ -142,16 +144,128 @@ def train_dqn_agent(episodes: int = 500):
         if episode % 100 == 0:
             agent.update_target_network()
             
-        # Print training loss and average reward per 50 episodes
-        if episode % 50 == 0 and episode > 0:
+        # Send progress updates every 10 episodes
+        if episode % 10 == 0 or episode == episodes - 1:
             avg_score = np.mean(scores)
             avg_loss = np.mean(losses) if losses else 0.0
-            print(f"Episode {episode}, Average Score: {avg_score:.2f}, Average Loss: {avg_loss:.4f}, Epsilon: {agent.epsilon:.3f}")
+            
+            # Calculate average reward for every 50 episodes for charting
+            chart_data = []
+            for i in range(0, len(episode_rewards), 50):
+                batch_rewards = episode_rewards[i:i+50]
+                if batch_rewards:
+                    chart_data.append({
+                        'episode': i + 25,  # Middle of the range
+                        'avg_reward': np.mean(batch_rewards)
+                    })
+            
+            progress_data = {
+                'episode': episode + 1,
+                'total_episodes': episodes,
+                'current_reward': total_reward,
+                'avg_reward': avg_score,
+                'loss': loss if loss else 0.0,
+                'avg_loss': avg_loss,
+                'epsilon': agent.epsilon,
+                'chart_data': chart_data,
+                'completed': episode == episodes - 1
+            }
+            
+            if progress_callback:
+                progress_callback(progress_data)
+            else:
+                print(f"Episode {episode + 1}/{episodes}, Reward: {total_reward:.2f}, Avg Score: {avg_score:.2f}, Loss: {avg_loss:.4f}, Epsilon: {agent.epsilon:.3f}")
     
     # Save the trained model
     os.makedirs('models', exist_ok=True)
     agent.save_model('models/dqn.pt')
-    print("Training completed!")
+    
+    if progress_callback:
+        progress_callback({
+            'episode': episodes,
+            'total_episodes': episodes,
+            'completed': True,
+            'message': 'Training completed! Model saved.'
+        })
+    else:
+        print("Training completed!")
+    
+    return agent
+
+
+def train_dqn_agent_generator(episodes: int = 500):
+    """Generator version of train_dqn_agent that yields progress updates."""
+    env = IntersectionEnv()
+    agent = DQNAgent(env.state_space_size, env.action_space_size)
+    
+    scores = deque(maxlen=100)
+    losses = deque(maxlen=100)
+    episode_rewards = []  # Track all episode rewards for charting
+    
+    for episode in range(episodes):
+        state = env.reset()
+        total_reward = 0
+        
+        for step in range(200):  # Max steps per episode (matching env max steps)
+            action = agent.act(state)
+            next_state, reward, done, _ = env.step(int(action))
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
+            total_reward += reward
+            
+            if done:
+                break
+                
+        scores.append(total_reward)
+        episode_rewards.append(total_reward)
+        loss = agent.replay()
+        if loss:
+            losses.append(loss)
+        
+        # Update target network every 100 episodes
+        if episode % 100 == 0:
+            agent.update_target_network()
+            
+        # Yield progress updates every 10 episodes
+        if episode % 10 == 0 or episode == episodes - 1:
+            avg_score = np.mean(scores)
+            avg_loss = np.mean(losses) if losses else 0.0
+            
+            # Calculate average reward for every 50 episodes for charting
+            chart_data = []
+            for i in range(0, len(episode_rewards), 50):
+                batch_rewards = episode_rewards[i:i+50]
+                if batch_rewards:
+                    chart_data.append({
+                        'episode': i + 25,  # Middle of the range
+                        'avg_reward': np.mean(batch_rewards)
+                    })
+            
+            progress_data = {
+                'episode': episode + 1,
+                'total_episodes': episodes,
+                'current_reward': total_reward,
+                'avg_reward': avg_score,
+                'loss': loss if loss else 0.0,
+                'avg_loss': avg_loss,
+                'epsilon': agent.epsilon,
+                'chart_data': chart_data,
+                'completed': episode == episodes - 1
+            }
+            
+            yield progress_data
+    
+    # Save the trained model
+    os.makedirs('models', exist_ok=True)
+    agent.save_model('models/dqn.pt')
+    
+    # Final completion message
+    yield {
+        'episode': episodes,
+        'total_episodes': episodes,
+        'completed': True,
+        'message': 'Training completed! Model saved.'
+    }
     
     return agent
 
