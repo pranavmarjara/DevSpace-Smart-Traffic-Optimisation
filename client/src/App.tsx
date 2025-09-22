@@ -13,6 +13,7 @@ import Alerts from "@/pages/Alerts";
 import Control from "@/pages/Control";
 import Optimization from "@/pages/Optimization";
 import Settings from "@/pages/Settings";
+import TryUs from "@/pages/TryUs";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/control" component={Control} />
       <Route path="/optimization" component={Optimization} />
       <Route path="/settings" component={Settings} />
+      <Route path="/try-us" component={TryUs} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -18,7 +18,8 @@ import {
   AlertCircle,
   Activity,
   Clock,
-  Zap
+  Zap,
+  Play
 } from "lucide-react";
 import { useLocation, Link } from "wouter";
 
@@ -64,6 +65,12 @@ const navigationItems = [
     url: "/settings",
     icon: Settings,
     badge: null
+  },
+  {
+    title: "Try Demo",
+    url: "/try-us",
+    icon: Play,
+    badge: "DEMO"
   }
 ];
 
