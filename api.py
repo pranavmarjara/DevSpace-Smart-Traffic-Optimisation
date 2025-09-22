@@ -184,36 +184,8 @@ class SimulateResource(Resource):
             
             env = IntersectionEnv()
             
-            if mode == 'optimized':
-                # Get the current active model safely
-                active_model = get_active_model()
-                active_model_path = f'models/{active_model}'
-                if not os.path.exists(active_model_path):
-                    return {'error': f'Active model {active_model} not found'}, 400
-                
-                try:
-                    from train_dqn import DQNAgent
-                    from traffic_env import IntersectionEnv
-                    
-                    # Load the specific active model
-                    env_for_agent = IntersectionEnv()
-                    agent = DQNAgent(env_for_agent.state_space_size, env_for_agent.action_space_size)
-                    
-                    if agent.load_model(active_model_path):
-                        agent.epsilon = 0.0  # No exploration during inference
-                        
-                        def policy_func(state):
-                            return agent.act(state)
-                        
-                        frames = env.run_simulation(steps, policy_func)
-                    else:
-                        return {'error': f'Failed to load model {active_model}'}, 500
-                        
-                except Exception as e:
-                    return {'error': f'Failed to load model: {str(e)}'}, 500
-            else:
-                # Use hardcoded alternating policy
-                frames = env.run_simulation(steps)
+            # Use the new queue-based optimization or hardcoded mode
+            frames = env.run_simulation(steps, mode=mode)
             
             # Calculate summary metrics
             if frames:
@@ -243,7 +215,8 @@ class SimulateResource(Resource):
             
             return {
                 'frames': frames,
-                'metrics': summary_metrics
+                'metrics': summary_metrics,
+                'step_duration_sec': 1  # Each step represents 1 second
             }
             
         except Exception as e:
