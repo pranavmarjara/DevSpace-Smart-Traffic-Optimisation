@@ -109,15 +109,18 @@ export default function AnimatedIntersection({
   const animationRef = useRef<number>();
   const lastSpawnIndex = useRef(0);
 
+  // Calculate yellow duration consistently
+  const getYellowDuration = (phaseDuration: number) => phaseDuration <= 5 ? 1 : 3;
+
   // Traffic light timing logic
   useEffect(() => {
     const timer = setInterval(() => {
       setPhaseTimer(prev => {
         const newTimer = prev + 1;
         const currentDuration = currentPhase === 'ns' ? validatedSignalTimings.northSouth : validatedSignalTimings.eastWest;
+        const yellowDuration = getYellowDuration(currentDuration);
         
-        // Yellow light phase - use 1 second for short durations, 3 seconds for longer ones
-        const yellowDuration = currentDuration <= 5 ? 1 : 3;
+        // Start yellow light phase
         if (newTimer >= currentDuration - yellowDuration && !isTransitioning) {
           setIsTransitioning(true);
           setTrafficLights(prev => {
@@ -133,12 +136,13 @@ export default function AnimatedIntersection({
           });
         }
         
-        // Switch phase
+        // Switch phase when timer reaches full duration
         if (newTimer >= currentDuration) {
           setIsTransitioning(false);
           setCurrentPhase(prev => prev === 'ns' ? 'ew' : 'ns');
           setTrafficLights(prev => {
             if (currentPhase === 'ns') {
+              // Switching from NS to EW
               return {
                 north: 'red',
                 south: 'red',
@@ -146,6 +150,7 @@ export default function AnimatedIntersection({
                 west: 'green'
               };
             } else {
+              // Switching from EW to NS
               return {
                 north: 'green',
                 south: 'green',
@@ -154,15 +159,15 @@ export default function AnimatedIntersection({
               };
             }
           });
-          return 0;
+          return 0; // Reset timer for next phase
         }
         
         return newTimer;
       });
-    }, 1000); // 1 second intervals for realistic timing
+    }, 1000); // Update every second
 
     return () => clearInterval(timer);
-  }, [currentPhase, validatedSignalTimings, isTransitioning]);
+  }, [currentPhase, validatedSignalTimings.northSouth, validatedSignalTimings.eastWest]);
 
   // Helper function to check for vehicle collisions in same lane
   const checkCollisionInLane = (newVehicle: Vehicle, existingVehicles: Vehicle[]): boolean => {
@@ -418,27 +423,30 @@ export default function AnimatedIntersection({
   // Calculate remaining time for each direction
   const calculateRemainingTime = (direction: keyof TrafficLightState): number => {
     const currentDuration = currentPhase === 'ns' ? validatedSignalTimings.northSouth : validatedSignalTimings.eastWest;
+    const yellowDuration = getYellowDuration(currentDuration);
     
-    if ((direction === 'north' || direction === 'south') && currentPhase === 'ns') {
-      // NS is currently active
+    // Check if this direction is in the current active phase
+    const isNSDirection = direction === 'north' || direction === 'south';
+    const isEWDirection = direction === 'east' || direction === 'west';
+    const isActivePhase = (isNSDirection && currentPhase === 'ns') || (isEWDirection && currentPhase === 'ew');
+    
+    if (isActivePhase) {
+      // This direction is currently active
       if (trafficLights[direction] === 'green') {
-        return Math.max(0, currentDuration - 3 - phaseTimer); // Time until yellow
+        // Show time until yellow starts
+        return Math.max(0, currentDuration - yellowDuration - phaseTimer);
       } else if (trafficLights[direction] === 'yellow') {
-        return Math.max(0, 3 - (phaseTimer - (currentDuration - 3))); // Yellow countdown
-      }
-    } else if ((direction === 'east' || direction === 'west') && currentPhase === 'ew') {
-      // EW is currently active
-      if (trafficLights[direction] === 'green') {
-        return Math.max(0, currentDuration - 3 - phaseTimer); // Time until yellow
-      } else if (trafficLights[direction] === 'yellow') {
-        return Math.max(0, 3 - (phaseTimer - (currentDuration - 3))); // Yellow countdown
+        // Show remaining yellow time
+        const yellowStartTime = currentDuration - yellowDuration;
+        const yellowElapsed = phaseTimer - yellowStartTime;
+        return Math.max(0, yellowDuration - yellowElapsed);
       }
     } else {
-      // Direction is red, show time until their turn
+      // This direction is red, show time until it becomes active
       const remainingCurrentPhase = Math.max(0, currentDuration - phaseTimer);
-      const nextPhaseDuration = currentPhase === 'ns' ? validatedSignalTimings.eastWest : validatedSignalTimings.northSouth;
       return remainingCurrentPhase;
     }
+    
     return 0;
   };
 
