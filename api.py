@@ -112,3 +112,67 @@ api.add_resource(IntersectionsResource, '/intersections')
 api.add_resource(AlertsResource, '/alerts') 
 api.add_resource(MetricsResource, '/metrics')
 api.add_resource(TrafficVolumeResource, '/traffic-volume')
+
+
+class SimulateResource(Resource):
+    """Traffic simulation endpoint for the demo page."""
+    
+    def post(self):
+        data = request.get_json()
+        mode = data.get('mode', 'hardcoded')  # 'hardcoded' or 'optimized'
+        steps = data.get('steps', 100)
+        
+        try:
+            from traffic_env import IntersectionEnv
+            
+            env = IntersectionEnv()
+            
+            if mode == 'optimized':
+                try:
+                    from train_dqn import get_optimized_policy
+                    policy_func = get_optimized_policy()
+                    frames = env.run_simulation(steps, policy_func)
+                except Exception as e:
+                    # Fallback to hardcoded if optimized fails
+                    print(f"Optimized policy failed: {e}, falling back to hardcoded")
+                    frames = env.run_simulation(steps)
+            else:
+                # Use hardcoded alternating policy
+                frames = env.run_simulation(steps)
+            
+            # Calculate summary metrics
+            if frames:
+                final_metrics = frames[-1]['metrics']
+                total_cars = sum(frame['queues'][direction] for frame in frames for direction in ['north', 'south', 'east', 'west'])
+                avg_total_cars = total_cars / len(frames) if frames else 0
+                
+                summary_metrics = {
+                    'mode': mode,
+                    'total_steps': len(frames),
+                    'cars_processed': final_metrics['cars_processed'],
+                    'avg_waiting_time': final_metrics['avg_waiting_time'],
+                    'avg_queue_length': final_metrics['avg_queue_length'],
+                    'avg_total_cars': avg_total_cars,
+                    'efficiency_score': max(0, 100 - (final_metrics['avg_waiting_time'] * 2))
+                }
+            else:
+                summary_metrics = {
+                    'mode': mode,
+                    'total_steps': 0,
+                    'cars_processed': 0,
+                    'avg_waiting_time': 0,
+                    'avg_queue_length': 0,
+                    'avg_total_cars': 0,
+                    'efficiency_score': 0
+                }
+            
+            return jsonify({
+                'frames': frames,
+                'metrics': summary_metrics
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+# Register the new simulation endpoint
+api.add_resource(SimulateResource, '/simulate')
