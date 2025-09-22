@@ -2,7 +2,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Play, Zap, BarChart3, Loader2, Brain } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface SimulationMetrics {
   mode: string;
@@ -72,6 +74,16 @@ export default function TryUs() {
   const [trainingLogs, setTrainingLogs] = useState('');
   const [trainingComplete, setTrainingComplete] = useState(false);
   const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [trainingProgress, setTrainingProgress] = useState({
+    episode: 0,
+    totalEpisodes: 0,
+    currentReward: 0,
+    avgReward: 0,
+    loss: 0,
+    avgLoss: 0,
+    epsilon: 0
+  });
+  const [trainingChartData, setTrainingChartData] = useState<Array<{episode: number, avg_reward: number}>>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const runSimulation = async (mode: 'hardcoded' | 'optimized') => {
@@ -127,6 +139,16 @@ export default function TryUs() {
     setTrainingLogs('');
     setTrainingComplete(false);
     setTrainingError(null);
+    setTrainingProgress({
+      episode: 0,
+      totalEpisodes: 0,
+      currentReward: 0,
+      avgReward: 0,
+      loss: 0,
+      avgLoss: 0,
+      epsilon: 0
+    });
+    setTrainingChartData([]);
     
     try {
       const response = await fetch('/api/train', {
@@ -140,7 +162,7 @@ export default function TryUs() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Handle streaming text response
+      // Handle streaming JSON response
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       
@@ -159,27 +181,80 @@ export default function TryUs() {
           buffer = lines.pop() || ''; // Keep incomplete line in buffer
           
           for (const line of lines) {
-            if (line.trim()) {
-              setTrainingLogs(prev => prev + line + '\n');
-              // Auto-scroll to bottom
-              setTimeout(() => {
-                logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-              }, 100);
+            if (line.trim() && line.startsWith('data: ')) {
+              try {
+                const jsonStr = line.replace('data: ', '');
+                const progressData = JSON.parse(jsonStr);
+                
+                // Handle error responses
+                if (progressData.error) {
+                  setTrainingError(progressData.message);
+                  if (progressData.completed) {
+                    setIsTraining(false);
+                    return;
+                  }
+                  continue;
+                }
+                
+                // Update progress state
+                if (progressData.episode !== undefined) {
+                  setTrainingProgress({
+                    episode: progressData.episode,
+                    totalEpisodes: progressData.total_episodes,
+                    currentReward: progressData.current_reward || 0,
+                    avgReward: progressData.avg_reward || 0,
+                    loss: progressData.loss || 0,
+                    avgLoss: progressData.avg_loss || 0,
+                    epsilon: progressData.epsilon || 0
+                  });
+                  
+                  // Update chart data
+                  if (progressData.chart_data) {
+                    setTrainingChartData(progressData.chart_data);
+                  }
+                  
+                  // Add to training logs
+                  const logLine = `Episode ${progressData.episode}/${progressData.total_episodes} - Reward: ${(progressData.current_reward || 0).toFixed(2)} - Loss: ${(progressData.loss || 0).toFixed(4)} - Epsilon: ${(progressData.epsilon || 0).toFixed(3)}`;
+                  setTrainingLogs(prev => prev + logLine + '\n');
+                }
+                
+                // Handle completion
+                if (progressData.completed) {
+                  setTrainingComplete(true);
+                  if (progressData.message) {
+                    setTrainingLogs(prev => prev + progressData.message + '\n');
+                  }
+                }
+                
+                // Auto-scroll to bottom
+                setTimeout(() => {
+                  logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+                
+              } catch (jsonError) {
+                console.error('Failed to parse JSON:', jsonError, line);
+                setTrainingLogs(prev => prev + line.replace('data: ', '') + '\n');
+              }
             }
           }
-        }
-        
-        // Process any remaining buffer
-        if (buffer.trim()) {
-          setTrainingLogs(prev => prev + buffer + '\n');
         }
       } else {
         // Fallback for browsers that don't support streaming
         const text = await response.text();
-        setTrainingLogs(text);
+        try {
+          const progressData = JSON.parse(text);
+          if (progressData.error) {
+            setTrainingError(progressData.message);
+          } else {
+            setTrainingLogs(text);
+            setTrainingComplete(true);
+          }
+        } catch {
+          setTrainingLogs(text);
+          setTrainingComplete(true);
+        }
       }
       
-      setTrainingComplete(true);
       setTrainingError(null);
     } catch (error) {
       console.error('Training failed:', error);
@@ -476,9 +551,9 @@ export default function TryUs() {
         </Button>
       </div>
 
-      {/* Training Logs Display */}
+      {/* Enhanced Training Display */}
       {(isTraining || trainingLogs || trainingComplete || trainingError) && (
-        <Card className="mx-auto max-w-4xl">
+        <Card className="mx-auto max-w-6xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Brain className="w-5 h-5" />
@@ -486,25 +561,103 @@ export default function TryUs() {
               {isTraining && <Loader2 className="w-4 h-4 animate-spin" />}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             {trainingError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <p className="text-red-700 font-medium">Training Failed</p>
                 <p className="text-red-600 text-sm">{trainingError}</p>
               </div>
             )}
             
             {trainingComplete && !trainingError && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <p className="text-green-700 font-medium">✅ Training Complete! Model saved.</p>
                 <p className="text-green-600 text-sm">You can now use "Optimize Now" and "Compare" with the trained model.</p>
               </div>
             )}
             
+            {(isTraining || trainingProgress.totalEpisodes > 0) && (
+              <div className="space-y-4">
+                {/* Progress Bar */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">Training Progress</span>
+                    <span className="text-muted-foreground">
+                      {trainingProgress.episode} / {trainingProgress.totalEpisodes} episodes
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(trainingProgress.episode / trainingProgress.totalEpisodes) * 100} 
+                    className="h-2"
+                  />
+                  <div className="text-center text-sm text-muted-foreground">
+                    {((trainingProgress.episode / trainingProgress.totalEpisodes) * 100).toFixed(1)}% complete
+                  </div>
+                </div>
+
+                {/* Stats Panel */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card className="p-4">
+                    <div className="text-sm text-muted-foreground">Current Episode</div>
+                    <div className="text-2xl font-bold text-blue-600">{trainingProgress.episode}</div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className="text-sm text-muted-foreground">Latest Reward</div>
+                    <div className="text-2xl font-bold text-green-600">{trainingProgress.currentReward.toFixed(2)}</div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className="text-sm text-muted-foreground">Avg Reward</div>
+                    <div className="text-2xl font-bold text-purple-600">{trainingProgress.avgReward.toFixed(2)}</div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className="text-sm text-muted-foreground">Current Loss</div>
+                    <div className="text-2xl font-bold text-orange-600">{trainingProgress.loss.toFixed(4)}</div>
+                  </Card>
+                </div>
+
+                {/* Line Chart */}
+                {trainingChartData.length > 0 && (
+                  <Card className="p-4">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-lg">Average Reward Progress</CardTitle>
+                      <CardDescription>Average reward per 50 episodes</CardDescription>
+                    </CardHeader>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={trainingChartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="episode" 
+                            label={{ value: 'Episode', position: 'insideBottom', offset: -5 }}
+                          />
+                          <YAxis 
+                            label={{ value: 'Avg Reward', angle: -90, position: 'insideLeft' }}
+                          />
+                          <Tooltip 
+                            formatter={(value: number) => [value.toFixed(2), 'Avg Reward']}
+                            labelFormatter={(episode) => `Episode ${episode}`}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="avg_reward" 
+                            stroke="#8884d8" 
+                            strokeWidth={2}
+                            dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }}
+                            activeDot={{ r: 6, stroke: '#8884d8', strokeWidth: 2 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            )}
+            
+            {/* Training Logs (Collapsible) */}
             {(trainingLogs || isTraining) && (
               <div className="space-y-2">
-                <h4 className="font-medium text-sm text-muted-foreground">Training Progress:</h4>
-                <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-sm max-h-96 overflow-y-auto">
+                <h4 className="font-medium text-sm text-muted-foreground">Training Logs:</h4>
+                <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-sm max-h-48 overflow-y-auto">
                   <pre className="whitespace-pre-wrap">{trainingLogs}</pre>
                   {isTraining && (
                     <div className="flex items-center gap-2 mt-2 text-blue-400">
