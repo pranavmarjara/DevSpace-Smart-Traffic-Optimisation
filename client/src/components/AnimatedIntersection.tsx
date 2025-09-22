@@ -116,8 +116,9 @@ export default function AnimatedIntersection({
         const newTimer = prev + 1;
         const currentDuration = currentPhase === 'ns' ? validatedSignalTimings.northSouth : validatedSignalTimings.eastWest;
         
-        // Yellow light phase (last 3 seconds)
-        if (newTimer >= currentDuration - 3 && !isTransitioning) {
+        // Yellow light phase - use 1 second for short durations, 3 seconds for longer ones
+        const yellowDuration = currentDuration <= 5 ? 1 : 3;
+        if (newTimer >= currentDuration - yellowDuration && !isTransitioning) {
           setIsTransitioning(true);
           setTrafficLights(prev => {
             const newLights = { ...prev };
