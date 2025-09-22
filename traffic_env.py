@@ -30,11 +30,11 @@ class IntersectionEnv:
         self.cars_processed = 0
         self.avg_queue_length = 0
         
-        # Action space: 0 = keep current, 1 = switch lights
+        # Action space: 0 = switch lights, 1 = keep same
         self.action_space_size = 2
         
-        # State space: queue lengths + light state + timer
-        self.state_space_size = len(self.directions) + 3
+        # State space: queue lengths [N, S, E, W] + current light phase
+        self.state_space_size = len(self.directions) + 1
         
     def reset(self) -> np.ndarray:
         """Reset the environment to initial state."""
@@ -51,8 +51,8 @@ class IntersectionEnv:
         """Execute one time step in the environment."""
         self.step_count += 1
         
-        # Handle action (0 = keep current, 1 = switch lights)
-        if action == 1:
+        # Handle action (0 = switch lights, 1 = keep same)
+        if action == 0:
             self._switch_lights()
         
         # Spawn new cars
@@ -70,8 +70,8 @@ class IntersectionEnv:
         # Calculate reward
         reward = self._calculate_reward()
         
-        # Check if episode is done (arbitrary episode length)
-        done = self.step_count >= 500
+        # Check if episode is done after fixed max steps
+        done = self.step_count >= 200
         
         return self._get_state(), reward, done, self._get_info()
     
@@ -110,27 +110,16 @@ class IntersectionEnv:
         self.light_timer = 0
     
     def _get_state(self) -> np.ndarray:
-        """Get current state representation."""
+        """Get current state representation: queue lengths [N, S, E, W] + current light phase."""
         queue_lengths = [len(self.queues[direction]) for direction in self.directions]
-        state = queue_lengths + [
-            self.light_state['ns'],
-            self.light_state['ew'],
-            self.light_timer
-        ]
+        # Current light phase: 0 = NS green, 1 = EW green
+        current_phase = 0 if self.light_state['ns'] == 1 else 1
+        state = queue_lengths + [current_phase]
         return np.array(state, dtype=np.float32)
     
     def _calculate_reward(self) -> float:
-        """Calculate reward based on current state."""
-        # Negative reward for long queues
-        queue_penalty = -sum(len(self.queues[direction]) for direction in self.directions)
-        
-        # Positive reward for processing cars
-        throughput_reward = self.cars_processed * 0.1
-        
-        # Penalty for total waiting time
-        waiting_penalty = -self.total_waiting_time * 0.01
-        
-        return queue_penalty + throughput_reward + waiting_penalty
+        """Calculate reward: -sum(queue_lengths) (penalize waiting cars)."""
+        return -sum(len(self.queues[direction]) for direction in self.directions)
     
     def _update_metrics(self):
         """Update environment metrics."""

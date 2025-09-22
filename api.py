@@ -124,18 +124,25 @@ class SimulateResource(Resource):
         
         try:
             from traffic_env import IntersectionEnv
+            import os
             
             env = IntersectionEnv()
             
             if mode == 'optimized':
+                # Check if trained model exists
+                if not os.path.exists('models/dqn.pt'):
+                    return {'error': 'model not trained'}, 400
+                
                 try:
-                    from train_dqn import get_optimized_policy
-                    policy_func = get_optimized_policy()
+                    from train_dqn import load_trained_agent
+                    agent = load_trained_agent()
+                    
+                    def policy_func(state):
+                        return agent.act(state)
+                    
                     frames = env.run_simulation(steps, policy_func)
                 except Exception as e:
-                    # Fallback to hardcoded if optimized fails
-                    print(f"Optimized policy failed: {e}, falling back to hardcoded")
-                    frames = env.run_simulation(steps)
+                    return {'error': f'Failed to load model: {str(e)}'}, 500
             else:
                 # Use hardcoded alternating policy
                 frames = env.run_simulation(steps)
@@ -166,13 +173,40 @@ class SimulateResource(Resource):
                     'efficiency_score': 0
                 }
             
-            return jsonify({
+            return {
                 'frames': frames,
                 'metrics': summary_metrics
-            })
+            }
             
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            return {'error': str(e)}, 500
 
-# Register the new simulation endpoint
+class TrainResource(Resource):
+    """Training endpoint to trigger DQN training."""
+    
+    def post(self):
+        """Trigger DQN training and return progress logs as plain text."""
+        try:
+            from train_dqn import train_dqn_agent
+            import sys
+            from io import StringIO
+            
+            # Capture training output
+            old_stdout = sys.stdout
+            sys.stdout = captured_output = StringIO()
+            
+            try:
+                # Train the agent
+                train_dqn_agent(episodes=500)
+                training_log = captured_output.getvalue()
+            finally:
+                sys.stdout = old_stdout
+            
+            return training_log, 200, {'Content-Type': 'text/plain'}
+            
+        except Exception as e:
+            return f"Training failed: {str(e)}", 500, {'Content-Type': 'text/plain'}
+
+# Register the endpoints
 api.add_resource(SimulateResource, '/simulate')
+api.add_resource(TrainResource, '/train')

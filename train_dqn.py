@@ -64,7 +64,7 @@ class DQNAgent:
     def replay(self, batch_size: int = 32):
         """Train the model on a batch of experiences."""
         if len(self.memory) < batch_size:
-            return
+            return 0.0
             
         batch = random.sample(self.memory, batch_size)
         states = torch.FloatTensor([e[0] for e in batch]).to(self.device)
@@ -85,6 +85,8 @@ class DQNAgent:
         
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+            
+        return loss.item()
             
     def save_model(self, filepath: str):
         """Save the trained model."""
@@ -109,18 +111,19 @@ class DQNAgent:
         return False
 
 
-def train_dqn_agent(episodes: int = 1000):
+def train_dqn_agent(episodes: int = 500):
     """Train the DQN agent on the traffic environment."""
     env = IntersectionEnv()
     agent = DQNAgent(env.state_space_size, env.action_space_size)
     
     scores = deque(maxlen=100)
+    losses = deque(maxlen=100)
     
     for episode in range(episodes):
         state = env.reset()
         total_reward = 0
         
-        for step in range(500):  # Max steps per episode
+        for step in range(200):  # Max steps per episode (matching env max steps)
             action = agent.act(state)
             next_state, reward, done, _ = env.step(int(action))
             agent.remember(state, action, reward, next_state, done)
@@ -131,16 +134,19 @@ def train_dqn_agent(episodes: int = 1000):
                 break
                 
         scores.append(total_reward)
-        agent.replay()
+        loss = agent.replay()
+        if loss:
+            losses.append(loss)
         
         # Update target network every 100 episodes
         if episode % 100 == 0:
             agent.update_target_network()
             
-        # Print progress
-        if episode % 100 == 0:
+        # Print training loss and average reward per 50 episodes
+        if episode % 50 == 0 and episode > 0:
             avg_score = np.mean(scores)
-            print(f"Episode {episode}, Average Score: {avg_score:.2f}, Epsilon: {agent.epsilon:.3f}")
+            avg_loss = np.mean(losses) if losses else 0.0
+            print(f"Episode {episode}, Average Score: {avg_score:.2f}, Average Loss: {avg_loss:.4f}, Epsilon: {agent.epsilon:.3f}")
     
     # Save the trained model
     os.makedirs('models', exist_ok=True)
