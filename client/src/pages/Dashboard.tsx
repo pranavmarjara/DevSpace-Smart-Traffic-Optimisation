@@ -3,6 +3,7 @@ import PerformanceMetricsWrapper from "@/components/PerformanceMetricsWrapper";
 import TrafficMapWrapper from "@/components/TrafficMapWrapper";
 import SystemAlertsPanelWrapper from "@/components/SystemAlertsPanelWrapper";
 import AnalyticsChartWrapper from "@/components/AnalyticsChartWrapper";
+import AnimatedTrafficGrid from "@/components/AnimatedTrafficGrid";
 import { Clock, Route, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -52,6 +53,15 @@ const mockIntersections = [
     aiRecommendation: { northSouth: 35, eastWest: 30 },
     emergencyMode: false
   }
+];
+
+const mockAnimatedIntersections = [
+  { id: '1', name: 'Bhubaneswar Square', status: 'congested' as const, signalTimings: { northSouth: 60, eastWest: 40 }, x: 0, y: 0 },
+  { id: '2', name: 'Rajmahal Square', status: 'moderate' as const, signalTimings: { northSouth: 45, eastWest: 35 }, x: 1, y: 0 },
+  { id: '3', name: 'Master Canteen', status: 'optimal' as const, signalTimings: { northSouth: 30, eastWest: 25 }, x: 2, y: 0 },
+  { id: '4', name: 'Jaydev Vihar', status: 'optimal' as const, signalTimings: { northSouth: 35, eastWest: 30 }, x: 0, y: 1 },
+  { id: '5', name: 'Patia Square', status: 'congested' as const, signalTimings: { northSouth: 70, eastWest: 45 }, x: 1, y: 1 },
+  { id: '6', name: 'Khandagiri Square', status: 'moderate' as const, signalTimings: { northSouth: 40, eastWest: 30 }, x: 2, y: 1 }
 ];
 
 const mockMapIntersections = [
@@ -187,21 +197,22 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Main Content Grid - Hybrid Web Components */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Traffic Map - Takes 2 columns */}
-        <TrafficMapWrapper 
-          intersections={mockMapIntersections}
-          selectedIntersection={selectedIntersection}
-          onIntersectionSelect={setSelectedIntersection}
-        />
+      {/* Animated Traffic Grid - Full width with live animations */}
+      <AnimatedTrafficGrid
+        intersections={mockAnimatedIntersections}
+        selectedIntersection={selectedIntersection}
+        onIntersectionSelect={setSelectedIntersection}
+      />
 
-        {/* System Alerts - Takes 1 column */}
-        <SystemAlertsPanelWrapper 
-          alerts={alerts}
-          onDismiss={handleDismissAlert}
-          onTakeAction={handleTakeAction}
-        />
+      {/* System Alerts */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-3">
+          <SystemAlertsPanelWrapper 
+            alerts={alerts}
+            onDismiss={handleDismissAlert}
+            onTakeAction={handleTakeAction}
+          />
+        </div>
       </div>
 
       {/* Analytics Chart - Hybrid Web Component */}

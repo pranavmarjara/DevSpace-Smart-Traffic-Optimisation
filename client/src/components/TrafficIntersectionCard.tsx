@@ -67,7 +67,10 @@ export default function TrafficIntersectionCard({ intersection }: TrafficInterse
   const handleApplyAIRecommendation = async () => {
     setIsOptimizing(true);
     
-    // Simulate API call delay
+    // Realistic AI processing delay (4-12 seconds)
+    const delay = 4000 + Math.random() * 8000;
+    
+    // Simulate realistic AI analysis and optimization time
     setTimeout(() => {
       setSignalTimings(intersection.aiRecommendation);
       setIsOptimizing(false);
@@ -77,7 +80,7 @@ export default function TrafficIntersectionCard({ intersection }: TrafficInterse
         description: `Signal timing optimized at ${intersection.name}. Expected wait time reduction: 15-20%.`,
         className: "border-chart-1 bg-chart-1/10 text-chart-1",
       });
-    }, 1500);
+    }, delay);
   };
 
   const handleEmergencyToggle = (checked: boolean) => {
