@@ -11,6 +11,7 @@ interface Vehicle {
   direction: 'north' | 'south' | 'east' | 'west';
   status: 'approaching' | 'waiting' | 'moving' | 'exiting';
   speed: number;
+  baseSpeed: number;
 }
 
 interface TrafficLightState {
@@ -18,6 +19,13 @@ interface TrafficLightState {
   south: 'red' | 'yellow' | 'green';
   east: 'red' | 'yellow' | 'green';
   west: 'red' | 'yellow' | 'green';
+}
+
+interface VehicleSpawnEvent {
+  time: number;
+  direction: 'north' | 'south' | 'east' | 'west';
+  color: string;
+  speed: number;
 }
 
 interface AnimatedIntersectionProps {
@@ -33,12 +41,17 @@ interface AnimatedIntersectionProps {
   isSelected?: boolean;
   onSelect?: () => void;
   className?: string;
+  vehicleSpawnEvents?: VehicleSpawnEvent[];
+  simulationTime?: number;
+  useRandomSpawning?: boolean;
 }
 
 const INTERSECTION_SIZE = 400;
 const ROAD_WIDTH = 80;
 const TRAFFIC_LIGHT_SIZE = 16;
 const VEHICLE_SIZE = 8;
+const MIN_VEHICLE_DISTANCE = 25; // Minimum distance between vehicles
+const SAFE_FOLLOWING_DISTANCE = 30; // Safe following distance
 
 // Vehicle spawn positions and target positions
 const SPAWN_POSITIONS = {
@@ -66,7 +79,10 @@ export default function AnimatedIntersection({
   intersection, 
   isSelected = false, 
   onSelect,
-  className = ""
+  className = "",
+  vehicleSpawnEvents = [],
+  simulationTime = 0,
+  useRandomSpawning = true
 }: AnimatedIntersectionProps) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [trafficLights, setTrafficLights] = useState<TrafficLightState>({
@@ -87,6 +103,7 @@ export default function AnimatedIntersection({
   
   const vehicleIdCounter = useRef(0);
   const animationRef = useRef<number>();
+  const lastSpawnIndex = useRef(0);
 
   // Traffic light timing logic
   useEffect(() => {
@@ -142,8 +159,107 @@ export default function AnimatedIntersection({
     return () => clearInterval(timer);
   }, [currentPhase, validatedSignalTimings, isTransitioning]);
 
-  // Vehicle spawning logic
+  // Helper function to check for vehicle collisions in same lane
+  const checkCollisionInLane = (newVehicle: Vehicle, existingVehicles: Vehicle[]): boolean => {
+    const sameDirectionVehicles = existingVehicles.filter(v => v.direction === newVehicle.direction);
+    
+    for (const vehicle of sameDirectionVehicles) {
+      const distance = Math.sqrt(
+        Math.pow(vehicle.x - newVehicle.x, 2) + 
+        Math.pow(vehicle.y - newVehicle.y, 2)
+      );
+      
+      if (distance < MIN_VEHICLE_DISTANCE) {
+        return true; // Collision detected
+      }
+    }
+    return false;
+  };
+
+  // Helper function to find vehicles ahead in same lane
+  const findVehicleAhead = (vehicle: Vehicle, allVehicles: Vehicle[]): Vehicle | null => {
+    const sameDirectionVehicles = allVehicles.filter(v => 
+      v.direction === vehicle.direction && v.id !== vehicle.id
+    );
+    
+    let closestVehicle: Vehicle | null = null;
+    let closestDistance = Infinity;
+    
+    for (const otherVehicle of sameDirectionVehicles) {
+      // Check if the other vehicle is ahead in the movement direction
+      let isAhead = false;
+      let distance = 0;
+      
+      switch (vehicle.direction) {
+        case 'north':
+          isAhead = otherVehicle.y > vehicle.y;
+          distance = otherVehicle.y - vehicle.y;
+          break;
+        case 'south':
+          isAhead = otherVehicle.y < vehicle.y;
+          distance = vehicle.y - otherVehicle.y;
+          break;
+        case 'east':
+          isAhead = otherVehicle.x < vehicle.x;
+          distance = vehicle.x - otherVehicle.x;
+          break;
+        case 'west':
+          isAhead = otherVehicle.x > vehicle.x;
+          distance = otherVehicle.x - vehicle.x;
+          break;
+      }
+      
+      if (isAhead && distance < closestDistance && distance > 0) {
+        closestDistance = distance;
+        closestVehicle = otherVehicle;
+      }
+    }
+    
+    return closestVehicle;
+  };
+
+  // Synchronized vehicle spawning logic
   useEffect(() => {
+    if (!useRandomSpawning && vehicleSpawnEvents.length > 0) {
+      // Spawn vehicles based on synchronized events
+      const currentTime = simulationTime;
+      
+      for (let i = lastSpawnIndex.current; i < vehicleSpawnEvents.length; i++) {
+        const spawnEvent = vehicleSpawnEvents[i];
+        
+        if (spawnEvent.time <= currentTime) {
+          const newVehicle: Vehicle = {
+            id: `vehicle_${vehicleIdCounter.current++}`,
+            ...SPAWN_POSITIONS[spawnEvent.direction],
+            targetX: INTERSECTION_POSITIONS[spawnEvent.direction].x,
+            targetY: INTERSECTION_POSITIONS[spawnEvent.direction].y,
+            color: spawnEvent.color,
+            direction: spawnEvent.direction,
+            status: 'approaching',
+            speed: spawnEvent.speed,
+            baseSpeed: spawnEvent.speed
+          };
+          
+          // Only spawn if no collision
+          setVehicles(prev => {
+            if (!checkCollisionInLane(newVehicle, prev)) {
+              return [...prev, newVehicle];
+            }
+            return prev;
+          });
+          
+          lastSpawnIndex.current = i + 1;
+        } else {
+          break;
+        }
+      }
+    }
+  }, [simulationTime, vehicleSpawnEvents, useRandomSpawning]);
+
+  // Random vehicle spawning logic (fallback)
+  useEffect(() => {
+    if (!useRandomSpawning) return;
+    
     const spawnInterval = setInterval(() => {
       // Random chance to spawn vehicles
       if (Math.random() < 0.3) {
@@ -151,25 +267,31 @@ export default function AnimatedIntersection({
         const direction = directions[Math.floor(Math.random() * directions.length)];
         const colors = ['#ef4444', '#3b82f6', '#eab308', '#f3f4f6', '#10b981'];
         const color = colors[Math.floor(Math.random() * colors.length)];
+        const baseSpeed = 1 + Math.random() * 0.5;
         
         const newVehicle: Vehicle = {
           id: `vehicle_${vehicleIdCounter.current++}`,
-          ...SPAWN_POSITIONS[direction],
           ...SPAWN_POSITIONS[direction],
           targetX: INTERSECTION_POSITIONS[direction].x,
           targetY: INTERSECTION_POSITIONS[direction].y,
           color,
           direction,
           status: 'approaching',
-          speed: 1 + Math.random() * 0.5
+          speed: baseSpeed,
+          baseSpeed
         };
 
-        setVehicles(prev => [...prev, newVehicle]);
+        setVehicles(prev => {
+          if (!checkCollisionInLane(newVehicle, prev)) {
+            return [...prev, newVehicle];
+          }
+          return prev;
+        });
       }
     }, 2000 + Math.random() * 3000); // Random spawn every 2-5 seconds
 
     return () => clearInterval(spawnInterval);
-  }, []);
+  }, [useRandomSpawning]);
 
   // Vehicle movement animation with performance optimization
   useEffect(() => {
@@ -184,6 +306,40 @@ export default function AnimatedIntersection({
 
       setVehicles(prevVehicles => {
         return prevVehicles.map(vehicle => {
+          // Check for vehicle ahead and adjust speed accordingly
+          const vehicleAhead = findVehicleAhead(vehicle, prevVehicles);
+          let adjustedSpeed = vehicle.baseSpeed;
+          
+          if (vehicleAhead) {
+            let distanceToVehicleAhead = 0;
+            
+            switch (vehicle.direction) {
+              case 'north':
+                distanceToVehicleAhead = vehicleAhead.y - vehicle.y;
+                break;
+              case 'south':
+                distanceToVehicleAhead = vehicle.y - vehicleAhead.y;
+                break;
+              case 'east':
+                distanceToVehicleAhead = vehicle.x - vehicleAhead.x;
+                break;
+              case 'west':
+                distanceToVehicleAhead = vehicleAhead.x - vehicle.x;
+                break;
+            }
+            
+            // Adjust speed based on distance to vehicle ahead
+            if (distanceToVehicleAhead < SAFE_FOLLOWING_DISTANCE) {
+              if (distanceToVehicleAhead < MIN_VEHICLE_DISTANCE) {
+                adjustedSpeed = 0; // Stop if too close
+              } else {
+                // Gradually reduce speed as we get closer
+                const speedReduction = (SAFE_FOLLOWING_DISTANCE - distanceToVehicleAhead) / SAFE_FOLLOWING_DISTANCE;
+                adjustedSpeed = vehicle.baseSpeed * (1 - speedReduction * 0.8);
+              }
+            }
+          }
+          
           // Check if vehicle should stop at intersection
           if (vehicle.status === 'approaching') {
             const distanceToIntersection = Math.sqrt(
@@ -193,7 +349,7 @@ export default function AnimatedIntersection({
             
             // If close to intersection and light is not green, stop and wait
             if (distanceToIntersection < 25 && trafficLights[vehicle.direction] !== 'green') {
-              return { ...vehicle, status: 'waiting' };
+              return { ...vehicle, status: 'waiting', speed: 0 };
             }
           }
 
@@ -203,7 +359,7 @@ export default function AnimatedIntersection({
                          vehicle.status === 'exiting' ||
                          (vehicle.status === 'waiting' && trafficLights[vehicle.direction] === 'green');
 
-          if (canMove || vehicle.status === 'moving' || vehicle.status === 'exiting') {
+          if (canMove && adjustedSpeed > 0) {
             const dx = vehicle.targetX - vehicle.x;
             const dy = vehicle.targetY - vehicle.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -217,27 +373,29 @@ export default function AnimatedIntersection({
                   y: vehicle.targetY,
                   targetX: EXIT_POSITIONS[vehicle.direction].x,
                   targetY: EXIT_POSITIONS[vehicle.direction].y,
-                  status: 'moving'
+                  status: 'moving',
+                  speed: adjustedSpeed
                 };
               } else {
                 // Vehicle has exited, remove it
                 return null;
               }
             } else {
-              // Move toward target
-              const moveX = (dx / distance) * vehicle.speed;
-              const moveY = (dy / distance) * vehicle.speed;
+              // Move toward target with adjusted speed
+              const moveX = (dx / distance) * adjustedSpeed;
+              const moveY = (dy / distance) * adjustedSpeed;
               
               return {
                 ...vehicle,
                 x: vehicle.x + moveX,
                 y: vehicle.y + moveY,
+                speed: adjustedSpeed,
                 status: vehicle.status === 'waiting' ? 'moving' : vehicle.status
               };
             }
           }
 
-          return vehicle;
+          return { ...vehicle, speed: adjustedSpeed };
         }).filter(Boolean) as Vehicle[];
       });
 
