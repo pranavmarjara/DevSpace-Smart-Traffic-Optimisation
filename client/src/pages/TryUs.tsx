@@ -3,7 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Play, Zap, BarChart3, Loader2, Brain } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Play, Zap, BarChart3, Loader2, Brain, Settings } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface SimulationMetrics {
@@ -85,6 +87,17 @@ export default function TryUs() {
   });
   const [trainingChartData, setTrainingChartData] = useState<Array<{episode: number, avg_reward: number}>>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  
+  // Hyperparameter state management
+  const [hyperparams, setHyperparams] = useState({
+    episodes: 500,
+    learningRate: 0.001,
+    gamma: 0.99,
+    epsilonStart: 1.0,
+    epsilonEnd: 0.1,
+    replayBufferSize: 10000
+  });
+  const [currentHyperparams, setCurrentHyperparams] = useState<typeof hyperparams | null>(null);
 
   const runSimulation = async (mode: 'hardcoded' | 'optimized') => {
     setIsSimulating(prev => ({ ...prev, [mode]: true }));
@@ -149,6 +162,7 @@ export default function TryUs() {
       epsilon: 0
     });
     setTrainingChartData([]);
+    setCurrentHyperparams(hyperparams); // Store current hyperparams for display
     
     try {
       const response = await fetch('/api/train', {
@@ -156,6 +170,7 @@ export default function TryUs() {
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify(hyperparams),
       });
 
       if (!response.ok) {
@@ -496,6 +511,101 @@ export default function TryUs() {
         </p>
       </div>
 
+      {/* Hyperparameter Configuration */}
+      <Card className="mx-auto max-w-4xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="w-5 h-5" />
+            Training Hyperparameters
+          </CardTitle>
+          <CardDescription>
+            Adjust the training parameters before starting the agent training
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="episodes">Episodes</Label>
+              <Input
+                id="episodes"
+                type="number"
+                value={hyperparams.episodes}
+                onChange={(e) => setHyperparams({...hyperparams, episodes: parseInt(e.target.value) || 500})}
+                disabled={isTraining}
+                min="100"
+                max="5000"
+                step="100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="learningRate">Learning Rate</Label>
+              <Input
+                id="learningRate"
+                type="number"
+                value={hyperparams.learningRate}
+                onChange={(e) => setHyperparams({...hyperparams, learningRate: parseFloat(e.target.value) || 0.001})}
+                disabled={isTraining}
+                min="0.0001"
+                max="0.1"
+                step="0.0001"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gamma">Gamma / Discount Factor</Label>
+              <Input
+                id="gamma"
+                type="number"
+                value={hyperparams.gamma}
+                onChange={(e) => setHyperparams({...hyperparams, gamma: parseFloat(e.target.value) || 0.99})}
+                disabled={isTraining}
+                min="0.1"
+                max="1.0"
+                step="0.01"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="epsilonStart">Epsilon Start</Label>
+              <Input
+                id="epsilonStart"
+                type="number"
+                value={hyperparams.epsilonStart}
+                onChange={(e) => setHyperparams({...hyperparams, epsilonStart: parseFloat(e.target.value) || 1.0})}
+                disabled={isTraining}
+                min="0.1"
+                max="1.0"
+                step="0.1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="epsilonEnd">Epsilon End</Label>
+              <Input
+                id="epsilonEnd"
+                type="number"
+                value={hyperparams.epsilonEnd}
+                onChange={(e) => setHyperparams({...hyperparams, epsilonEnd: parseFloat(e.target.value) || 0.1})}
+                disabled={isTraining}
+                min="0.01"
+                max="1.0"
+                step="0.01"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="replayBufferSize">Replay Buffer Size</Label>
+              <Input
+                id="replayBufferSize"
+                type="number"
+                value={hyperparams.replayBufferSize}
+                onChange={(e) => setHyperparams({...hyperparams, replayBufferSize: parseInt(e.target.value) || 10000})}
+                disabled={isTraining}
+                min="1000"
+                max="100000"
+                step="1000"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Control Buttons */}
       <div className="flex justify-center gap-4">
         <Button
@@ -578,6 +688,20 @@ export default function TryUs() {
             
             {(isTraining || trainingProgress.totalEpisodes > 0) && (
               <div className="space-y-4">
+                {/* Hyperparameters Display */}
+                {currentHyperparams && (
+                  <Card className="p-4 bg-muted/50">
+                    <div className="text-sm font-medium mb-3">Training Configuration:</div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                      <div><strong>Episodes:</strong> {currentHyperparams.episodes}</div>
+                      <div><strong>Learning Rate:</strong> {currentHyperparams.learningRate}</div>
+                      <div><strong>Gamma:</strong> {currentHyperparams.gamma}</div>
+                      <div><strong>Epsilon:</strong> {currentHyperparams.epsilonStart} → {currentHyperparams.epsilonEnd}</div>
+                      <div><strong>Buffer Size:</strong> {currentHyperparams.replayBufferSize.toLocaleString()}</div>
+                    </div>
+                  </Card>
+                )}
+                
                 {/* Progress Bar */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">

@@ -191,10 +191,30 @@ class TrainResource(Resource):
             import json
             from flask import Response
             
+            # Extract hyperparameters from request body
+            data = request.get_json() or {}
+            
+            # Validate and clamp hyperparameters
+            episodes = max(100, min(5000, data.get('episodes', 500)))
+            learning_rate = max(0.0001, min(0.1, data.get('learningRate', 0.001)))
+            gamma = max(0.1, min(1.0, data.get('gamma', 0.99)))
+            epsilon_start = max(0.1, min(1.0, data.get('epsilonStart', 1.0)))
+            epsilon_end = max(0.01, min(1.0, data.get('epsilonEnd', 0.1)))
+            replay_buffer_size = max(1000, min(100000, data.get('replayBufferSize', 10000)))
+            
+            hyperparams = {
+                'episodes': episodes,
+                'learning_rate': learning_rate,
+                'gamma': gamma,
+                'epsilon_start': epsilon_start,
+                'epsilon_end': epsilon_end,
+                'replay_buffer_size': replay_buffer_size
+            }
+            
             def generate_training_updates():
                 """Generator function that yields JSON progress updates."""
                 try:
-                    for progress_data in train_dqn_agent_generator(episodes=500):
+                    for progress_data in train_dqn_agent_generator(**hyperparams):
                         # Convert to JSON and add proper SSE format
                         json_data = json.dumps(progress_data)
                         yield f"data: {json_data}\n\n"

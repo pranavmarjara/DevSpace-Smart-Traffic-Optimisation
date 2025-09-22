@@ -26,14 +26,17 @@ class DQNNetwork(nn.Module):
 class DQNAgent:
     """DQN Agent for learning traffic light control."""
     
-    def __init__(self, state_size: int, action_size: int, lr: float = 0.001):
+    def __init__(self, state_size: int, action_size: int, lr: float = 0.001, 
+                 gamma: float = 0.99, epsilon_start: float = 1.0, epsilon_end: float = 0.1,
+                 replay_buffer_size: int = 10000):
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = deque(maxlen=10000)
-        self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = 0.01
+        self.memory = deque(maxlen=replay_buffer_size)
+        self.epsilon = epsilon_start  # exploration rate
+        self.epsilon_min = epsilon_end
         self.epsilon_decay = 0.995
         self.learning_rate = lr
+        self.gamma = gamma  # discount factor
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Neural networks
@@ -75,7 +78,7 @@ class DQNAgent:
         
         current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
         next_q_values = self.target_network(next_states).max(1)[0].detach()
-        target_q_values = rewards + (0.99 * next_q_values * ~dones)
+        target_q_values = rewards + (self.gamma * next_q_values * ~dones)
         
         loss = nn.MSELoss()(current_q_values.squeeze(), target_q_values)
         
@@ -111,10 +114,15 @@ class DQNAgent:
         return False
 
 
-def train_dqn_agent(episodes: int = 500, progress_callback=None):
+def train_dqn_agent(episodes: int = 500, learning_rate: float = 0.001, 
+                    gamma: float = 0.99, epsilon_start: float = 1.0, 
+                    epsilon_end: float = 0.1, replay_buffer_size: int = 10000,
+                    progress_callback=None):
     """Train the DQN agent on the traffic environment."""
     env = IntersectionEnv()
-    agent = DQNAgent(env.state_space_size, env.action_space_size)
+    agent = DQNAgent(env.state_space_size, env.action_space_size, 
+                     lr=learning_rate, gamma=gamma, epsilon_start=epsilon_start,
+                     epsilon_end=epsilon_end, replay_buffer_size=replay_buffer_size)
     
     scores = deque(maxlen=100)
     losses = deque(maxlen=100)
@@ -193,10 +201,14 @@ def train_dqn_agent(episodes: int = 500, progress_callback=None):
     return agent
 
 
-def train_dqn_agent_generator(episodes: int = 500):
+def train_dqn_agent_generator(episodes: int = 500, learning_rate: float = 0.001, 
+                              gamma: float = 0.99, epsilon_start: float = 1.0, 
+                              epsilon_end: float = 0.1, replay_buffer_size: int = 10000):
     """Generator version of train_dqn_agent that yields progress updates."""
     env = IntersectionEnv()
-    agent = DQNAgent(env.state_space_size, env.action_space_size)
+    agent = DQNAgent(env.state_space_size, env.action_space_size, 
+                     lr=learning_rate, gamma=gamma, epsilon_start=epsilon_start,
+                     epsilon_end=epsilon_end, replay_buffer_size=replay_buffer_size)
     
     scores = deque(maxlen=100)
     losses = deque(maxlen=100)
