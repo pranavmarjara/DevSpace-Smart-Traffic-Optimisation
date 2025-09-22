@@ -925,33 +925,6 @@ export default function TryUs() {
           Train Agent
         </Button>
         
-        <Button
-          onClick={() => runSimulation('hardcoded')}
-          disabled={isTraining || isSimulating.hardcoded}
-          variant="outline"
-          size="lg"
-        >
-          {isSimulating.hardcoded ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Play className="w-4 h-4 mr-2" />
-          )}
-          Run Hardcoded
-        </Button>
-        
-        <Button
-          onClick={() => runSimulation('optimized')}
-          disabled={isTraining || isSimulating.optimized}
-          variant="outline"
-          size="lg"
-        >
-          {isSimulating.optimized ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Zap className="w-4 h-4 mr-2" />
-          )}
-          Optimize Now
-        </Button>
         
         <Button
           onClick={runComparison}
@@ -1004,7 +977,7 @@ export default function TryUs() {
             {trainingComplete && !trainingError && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <p className="text-green-700 font-medium">✅ Training Complete! Model saved.</p>
-                <p className="text-green-600 text-sm">You can now use "Optimize Now" and "Compare" with the trained model.</p>
+                <p className="text-green-600 text-sm">You can now use "Compare" with the trained model.</p>
               </div>
             )}
             
