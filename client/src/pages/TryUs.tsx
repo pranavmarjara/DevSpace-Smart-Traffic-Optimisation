@@ -129,6 +129,7 @@ export default function TryUs() {
   const [trafficScenario] = useState<VehicleSpawnEvent[]>(createTrafficScenario());
   const [simulationTime, setSimulationTime] = useState(0);
   const [isRunningDemo, setIsRunningDemo] = useState(false);
+  const [demoKey, setDemoKey] = useState(0); // Force reset of components
   const simulationTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Training state management
@@ -272,10 +273,12 @@ export default function TryUs() {
       }
       setIsRunningDemo(false);
       setSimulationTime(0);
+      setDemoKey(prev => prev + 1); // Force component reset
     } else {
       // Start new demo
       setIsRunningDemo(true);
       setSimulationTime(0);
+      setDemoKey(prev => prev + 1); // Force component reset
       
       // Run simulation timer
       simulationTimerRef.current = setInterval(() => {
@@ -288,6 +291,7 @@ export default function TryUs() {
               simulationTimerRef.current = null;
             }
             setIsRunningDemo(false);
+            setDemoKey(prev => prev + 1); // Clear vehicles when demo completes
             return 10;
           }
           return newTime;
@@ -1072,13 +1076,14 @@ export default function TryUs() {
           
           <div className="relative">
             <AnimatedIntersection
+              key={`hardcoded-${demoKey}`}
               intersection={{
                 id: 'hardcoded',
                 name: 'Hardcoded Control',
                 status: 'moderate',
                 signalTimings: {
-                  northSouth: 45, // Longer fixed timing - less efficient
-                  eastWest: 45
+                  northSouth: isRunningDemo ? 8 : 45, // Short demo timing vs normal timing
+                  eastWest: isRunningDemo ? 8 : 45
                 }
               }}
               className="border-2 border-orange-200"
@@ -1145,13 +1150,14 @@ export default function TryUs() {
           
           <div className="relative">
             <AnimatedIntersection
+              key={`optimized-${demoKey}`}
               intersection={{
                 id: 'optimized',
                 name: 'AI-Optimized Control',
                 status: 'optimal',
                 signalTimings: {
-                  northSouth: 35, // Shorter, more efficient timing
-                  eastWest: 30
+                  northSouth: isRunningDemo ? 4 : 35, // Smart adaptive timing vs normal timing
+                  eastWest: isRunningDemo ? 6 : 30
                 }
               }}
               className="border-2 border-green-200"

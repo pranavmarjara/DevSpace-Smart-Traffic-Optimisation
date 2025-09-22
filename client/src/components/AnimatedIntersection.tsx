@@ -95,10 +95,14 @@ export default function AnimatedIntersection({
   const [phaseTimer, setPhaseTimer] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   
-  // Validate and ensure signal timings are within realistic bounds (30-45s)
+  // Validate signal timings - allow short timings for demo mode (< 15s), otherwise clamp to 30-45s
   const validatedSignalTimings = {
-    northSouth: Math.max(30, Math.min(45, intersection.signalTimings.northSouth)),
-    eastWest: Math.max(30, Math.min(45, intersection.signalTimings.eastWest))
+    northSouth: intersection.signalTimings.northSouth < 15 
+      ? Math.max(2, intersection.signalTimings.northSouth) // Demo mode: minimum 2s
+      : Math.max(30, Math.min(45, intersection.signalTimings.northSouth)), // Normal mode: 30-45s
+    eastWest: intersection.signalTimings.eastWest < 15
+      ? Math.max(2, intersection.signalTimings.eastWest) // Demo mode: minimum 2s  
+      : Math.max(30, Math.min(45, intersection.signalTimings.eastWest)) // Normal mode: 30-45s
   };
   
   const vehicleIdCounter = useRef(0);
