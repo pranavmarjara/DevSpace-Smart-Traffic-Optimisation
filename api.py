@@ -195,9 +195,9 @@ class TrainResource(Resource):
                 """Generator function that yields JSON progress updates."""
                 try:
                     for progress_data in train_dqn_agent_generator(episodes=500):
-                        # Convert to JSON and add newline for streaming
-                        json_data = json.dumps(progress_data) + '\n'
-                        yield f"data: {json_data}"
+                        # Convert to JSON and add proper SSE format
+                        json_data = json.dumps(progress_data)
+                        yield f"data: {json_data}\n\n"
                         
                         # Add a small delay to ensure proper streaming
                         import time
@@ -213,7 +213,7 @@ class TrainResource(Resource):
             
             return Response(
                 generate_training_updates(),
-                mimetype='text/plain',
+                mimetype='text/event-stream',
                 headers={
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive',
