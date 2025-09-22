@@ -16,14 +16,19 @@ class IntersectionEnv:
         # Initialize queues for each direction
         self.queues = {direction: [] for direction in self.directions}
         
-        # Traffic light states (0 = red, 1 = green)
+        # Traffic light states: 'green', 'yellow', 'red'
         # NS group (north-south), EW group (east-west)
-        self.light_state = {'ns': 1, 'ew': 0}  # Start with NS green
+        self.light_state = {'ns': 'green', 'ew': 'red'}  # Start with NS green
+        self.current_phase = 'ns'  # Which group currently has green/yellow
         
-        # Timing
+        # Timing configuration
         self.step_count = 0
         self.light_timer = 0
         self.current_phase_duration = 30  # Default phase duration
+        self.min_green_time = 5  # Minimum green time before switching
+        self.max_green_time = 60  # Maximum green time
+        self.yellow_time = 3  # Yellow phase duration
+        self.step_duration_sec = 1  # Each step represents 1 second
         
         # Metrics
         self.total_waiting_time = 0
@@ -39,9 +44,11 @@ class IntersectionEnv:
     def reset(self) -> np.ndarray:
         """Reset the environment to initial state."""
         self.queues = {direction: [] for direction in self.directions}
-        self.light_state = {'ns': 1, 'ew': 0}
+        self.light_state = {'ns': 'green', 'ew': 'red'}
+        self.current_phase = 'ns'
         self.step_count = 0
         self.light_timer = 0
+        self.current_phase_duration = 30
         self.total_waiting_time = 0
         self.cars_processed = 0
         self.avg_queue_length = 0
@@ -86,7 +93,7 @@ class IntersectionEnv:
     def _process_cars(self):
         """Process cars through the intersection based on light state."""
         # Process north-south traffic
-        if self.light_state['ns'] == 1:
+        if self.light_state['ns'] == 'green':
             for direction in ['north', 'south']:
                 if self.queues[direction]:
                     # Remove car from queue (car goes through intersection)
@@ -95,7 +102,7 @@ class IntersectionEnv:
                     self.total_waiting_time += (self.step_count - car_spawn_time)
         
         # Process east-west traffic
-        if self.light_state['ew'] == 1:
+        if self.light_state['ew'] == 'green':
             for direction in ['east', 'west']:
                 if self.queues[direction]:
                     # Remove car from queue (car goes through intersection)
@@ -104,17 +111,40 @@ class IntersectionEnv:
                     self.total_waiting_time += (self.step_count - car_spawn_time)
     
     def _switch_lights(self):
-        """Switch traffic light states."""
-        self.light_state['ns'] = 1 - self.light_state['ns']
-        self.light_state['ew'] = 1 - self.light_state['ew']
-        self.light_timer = 0
+        """Switch traffic light states with yellow phase."""
+        if self.current_phase == 'ns':
+            if self.light_state['ns'] == 'green':
+                # NS goes to yellow
+                self.light_state['ns'] = 'yellow'
+                self.light_timer = 0
+                self.current_phase_duration = self.yellow_time
+            elif self.light_state['ns'] == 'yellow':
+                # NS goes to red, EW goes to green
+                self.light_state['ns'] = 'red'
+                self.light_state['ew'] = 'green'
+                self.current_phase = 'ew'
+                self.light_timer = 0
+                self.current_phase_duration = 30  # Default green time
+        else:  # current_phase == 'ew'
+            if self.light_state['ew'] == 'green':
+                # EW goes to yellow
+                self.light_state['ew'] = 'yellow'
+                self.light_timer = 0
+                self.current_phase_duration = self.yellow_time
+            elif self.light_state['ew'] == 'yellow':
+                # EW goes to red, NS goes to green
+                self.light_state['ew'] = 'red'
+                self.light_state['ns'] = 'green'
+                self.current_phase = 'ns'
+                self.light_timer = 0
+                self.current_phase_duration = 30  # Default green time
     
     def _get_state(self) -> np.ndarray:
         """Get current state representation: queue lengths [N, S, E, W] + current light phase."""
         queue_lengths = [len(self.queues[direction]) for direction in self.directions]
-        # Current light phase: 0 = NS green, 1 = EW green
-        current_phase = 0 if self.light_state['ns'] == 1 else 1
-        state = queue_lengths + [current_phase]
+        # Current light phase: 0 = NS green/yellow, 1 = EW green/yellow
+        current_phase_num = 0 if self.current_phase == 'ns' else 1
+        state = queue_lengths + [current_phase_num]
         return np.array(state, dtype=np.float32)
     
     def _calculate_reward(self) -> float:
@@ -178,14 +208,22 @@ class IntersectionEnv:
                 'color': '#3b82f6'  # Blue
             })
         
+        # Calculate remaining times for each direction
+        remaining_times = self._calculate_remaining_times()
+        
         return {
             'cars': cars,
             'lights': {
-                'N': 'green' if self.light_state['ns'] == 1 else 'red',
-                'S': 'green' if self.light_state['ns'] == 1 else 'red',
-                'E': 'green' if self.light_state['ew'] == 1 else 'red',
-                'W': 'green' if self.light_state['ew'] == 1 else 'red'
+                'N': {'color': self.light_state['ns'], 'remaining': remaining_times['N']},
+                'S': {'color': self.light_state['ns'], 'remaining': remaining_times['S']},
+                'E': {'color': self.light_state['ew'], 'remaining': remaining_times['E']},
+                'W': {'color': self.light_state['ew'], 'remaining': remaining_times['W']}
             },
+            'phase': self.current_phase,
+            'phase_remaining': self.current_phase_duration - self.light_timer,
+            'phase_duration': self.current_phase_duration,
+            'step_duration_sec': self.step_duration_sec,
+            'queues': {direction: len(self.queues[direction]) for direction in self.directions},
             'metrics': {
                 'cars_processed': self.cars_processed,
                 'avg_waiting_time': self.total_waiting_time / max(1, self.cars_processed),
@@ -196,18 +234,80 @@ class IntersectionEnv:
             'step': self.step_count
         }
     
-    def run_simulation(self, steps: int, policy_func=None) -> List[Dict[str, Any]]:
+    def _calculate_remaining_times(self) -> Dict[str, int]:
+        """Calculate remaining time for each direction's lights."""
+        remaining_times = {'N': 0, 'S': 0, 'E': 0, 'W': 0}
+        
+        if self.current_phase == 'ns':
+            if self.light_state['ns'] == 'green':
+                # NS is green, show countdown for green
+                remaining_times['N'] = remaining_times['S'] = self.current_phase_duration - self.light_timer
+                # EW is red, show time until their turn (green + yellow for current phase)
+                ew_wait_time = (self.current_phase_duration - self.light_timer) + self.yellow_time
+                remaining_times['E'] = remaining_times['W'] = ew_wait_time
+            elif self.light_state['ns'] == 'yellow':
+                # NS is yellow, show countdown for yellow
+                remaining_times['N'] = remaining_times['S'] = self.current_phase_duration - self.light_timer
+                # EW will be green soon
+                remaining_times['E'] = remaining_times['W'] = self.current_phase_duration - self.light_timer
+        else:  # current_phase == 'ew'
+            if self.light_state['ew'] == 'green':
+                # EW is green, show countdown for green
+                remaining_times['E'] = remaining_times['W'] = self.current_phase_duration - self.light_timer
+                # NS is red, show time until their turn
+                ns_wait_time = (self.current_phase_duration - self.light_timer) + self.yellow_time
+                remaining_times['N'] = remaining_times['S'] = ns_wait_time
+            elif self.light_state['ew'] == 'yellow':
+                # EW is yellow, show countdown for yellow
+                remaining_times['E'] = remaining_times['W'] = self.current_phase_duration - self.light_timer
+                # NS will be green soon
+                remaining_times['N'] = remaining_times['S'] = self.current_phase_duration - self.light_timer
+        
+        return remaining_times
+    
+    def _should_switch_optimized(self) -> bool:
+        """Queue-based optimization logic to determine if lights should switch."""
+        # Must wait minimum green time
+        if self.light_timer < self.min_green_time:
+            return False
+        
+        # Must switch at maximum green time
+        if self.light_timer >= self.max_green_time:
+            return True
+        
+        # Calculate queue totals for each group
+        ns_queue_total = len(self.queues['north']) + len(self.queues['south'])
+        ew_queue_total = len(self.queues['east']) + len(self.queues['west'])
+        
+        # Switch if opposing direction has significantly more cars waiting
+        if self.current_phase == 'ns':
+            # Currently NS is green, check if EW has more cars + hysteresis
+            return ew_queue_total > ns_queue_total + 1
+        else:
+            # Currently EW is green, check if NS has more cars + hysteresis
+            return ns_queue_total > ew_queue_total + 1
+    
+    def run_simulation(self, steps: int, policy_func=None, mode='hardcoded') -> List[Dict[str, Any]]:
         """Run a complete simulation and return all frames."""
         self.reset()
         frames = []
         
         for _ in range(steps):
-            # Get action from policy or use default alternating
-            if policy_func:
-                action = policy_func(self._get_state())
+            if mode == 'optimized':
+                # Use queue-based optimization
+                if self.light_state[self.current_phase] == 'green':
+                    # Only switch from green (not yellow)
+                    action = 0 if self._should_switch_optimized() else 1
+                else:
+                    # Continue yellow phase until it's complete
+                    action = 0 if self.light_timer >= self.current_phase_duration else 1
             else:
-                # Simple alternating policy: switch every 30 steps
-                action = 1 if self.light_timer >= 30 else 0
+                # Hardcoded mode: switch every 30 steps (fixed timing)
+                if self.light_state[self.current_phase] == 'green':
+                    action = 0 if self.light_timer >= 30 else 1
+                else:
+                    # Continue yellow phase until it's complete
+                    action = 0 if self.light_timer >= self.current_phase_duration else 1
             
             self.step(action)
             frames.append(self.render_frame())
