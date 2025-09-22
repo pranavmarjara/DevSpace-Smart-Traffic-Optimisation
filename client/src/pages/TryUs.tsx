@@ -18,56 +18,45 @@ interface VehicleSpawnEvent {
 }
 
 const createTrafficScenario = (): VehicleSpawnEvent[] => {
-  const scenario: VehicleSpawnEvent[] = [];
   const colors = ['#ef4444', '#3b82f6', '#eab308', '#10b981', '#8b5cf6'];
   
-  // Rush hour scenario: Heavy north-south traffic with moderate east-west
+  // Compressed 10-second rush hour burst scenario
   const events = [
-    // Time 0-10s: Light traffic
-    { time: 2, direction: 'north', color: colors[0], speed: 1.2 },
-    { time: 4, direction: 'east', color: colors[1], speed: 1.1 },
-    { time: 6, direction: 'south', color: colors[2], speed: 1.3 },
-    { time: 8, direction: 'west', color: colors[3], speed: 1.0 },
+    // 0-2s: Initial wave
+    { time: 0.5, direction: 'north', color: colors[0], speed: 1.2 },
+    { time: 1.0, direction: 'south', color: colors[1], speed: 1.1 },
+    { time: 1.5, direction: 'north', color: colors[2], speed: 1.0 },
     
-    // Time 10-20s: Building up traffic
-    { time: 10, direction: 'north', color: colors[4], speed: 1.1 },
-    { time: 12, direction: 'north', color: colors[0], speed: 1.2 },
-    { time: 14, direction: 'south', color: colors[1], speed: 1.3 },
-    { time: 16, direction: 'east', color: colors[2], speed: 1.0 },
-    { time: 18, direction: 'south', color: colors[3], speed: 1.1 },
+    // 2-4s: Building traffic
+    { time: 2.0, direction: 'east', color: colors[3], speed: 1.1 },
+    { time: 2.5, direction: 'south', color: colors[4], speed: 1.2 },
+    { time: 3.0, direction: 'north', color: colors[0], speed: 1.0 },
+    { time: 3.5, direction: 'west', color: colors[1], speed: 1.3 },
     
-    // Time 20-40s: Rush hour peak - heavy north-south traffic
-    { time: 20, direction: 'north', color: colors[4], speed: 1.0 },
-    { time: 22, direction: 'north', color: colors[0], speed: 1.1 },
-    { time: 24, direction: 'south', color: colors[1], speed: 1.2 },
-    { time: 25, direction: 'north', color: colors[2], speed: 1.0 },
-    { time: 27, direction: 'south', color: colors[3], speed: 1.3 },
-    { time: 29, direction: 'north', color: colors[4], speed: 1.1 },
-    { time: 30, direction: 'west', color: colors[0], speed: 1.0 },
-    { time: 32, direction: 'south', color: colors[1], speed: 1.2 },
-    { time: 34, direction: 'north', color: colors[2], speed: 1.0 },
-    { time: 36, direction: 'east', color: colors[3], speed: 1.1 },
-    { time: 38, direction: 'south', color: colors[4], speed: 1.3 },
+    // 4-6s: Heavy traffic peak
+    { time: 4.0, direction: 'north', color: colors[2], speed: 1.1 },
+    { time: 4.2, direction: 'south', color: colors[3], speed: 1.0 },
+    { time: 4.5, direction: 'north', color: colors[4], speed: 1.2 },
+    { time: 4.8, direction: 'east', color: colors[0], speed: 1.1 },
+    { time: 5.0, direction: 'south', color: colors[1], speed: 1.0 },
+    { time: 5.3, direction: 'north', color: colors[2], speed: 1.3 },
+    { time: 5.5, direction: 'west', color: colors[3], speed: 1.1 },
     
-    // Time 40-60s: Continued heavy traffic
-    { time: 40, direction: 'north', color: colors[0], speed: 1.1 },
-    { time: 42, direction: 'north', color: colors[1], speed: 1.0 },
-    { time: 44, direction: 'south', color: colors[2], speed: 1.2 },
-    { time: 46, direction: 'west', color: colors[3], speed: 1.1 },
-    { time: 48, direction: 'north', color: colors[4], speed: 1.0 },
-    { time: 50, direction: 'south', color: colors[0], speed: 1.3 },
-    { time: 52, direction: 'east', color: colors[1], speed: 1.1 },
-    { time: 54, direction: 'north', color: colors[2], speed: 1.0 },
-    { time: 56, direction: 'south', color: colors[3], speed: 1.2 },
-    { time: 58, direction: 'north', color: colors[4], speed: 1.1 },
+    // 6-8s: Peak congestion
+    { time: 6.0, direction: 'north', color: colors[4], speed: 1.0 },
+    { time: 6.2, direction: 'south', color: colors[0], speed: 1.2 },
+    { time: 6.4, direction: 'north', color: colors[1], speed: 1.1 },
+    { time: 6.6, direction: 'east', color: colors[2], speed: 1.0 },
+    { time: 6.8, direction: 'south', color: colors[3], speed: 1.3 },
+    { time: 7.0, direction: 'north', color: colors[4], speed: 1.1 },
+    { time: 7.2, direction: 'west', color: colors[0], speed: 1.0 },
+    { time: 7.5, direction: 'south', color: colors[1], speed: 1.2 },
     
-    // Time 60-80s: Gradual decrease
-    { time: 62, direction: 'south', color: colors[0], speed: 1.2 },
-    { time: 65, direction: 'west', color: colors[1], speed: 1.0 },
-    { time: 68, direction: 'north', color: colors[2], speed: 1.1 },
-    { time: 72, direction: 'east', color: colors[3], speed: 1.2 },
-    { time: 75, direction: 'south', color: colors[4], speed: 1.0 },
-    { time: 78, direction: 'north', color: colors[0], speed: 1.1 }
+    // 8-10s: Tapering off
+    { time: 8.0, direction: 'north', color: colors[2], speed: 1.1 },
+    { time: 8.5, direction: 'east', color: colors[3], speed: 1.0 },
+    { time: 9.0, direction: 'south', color: colors[4], speed: 1.2 },
+    { time: 9.5, direction: 'north', color: colors[0], speed: 1.1 }
   ];
   
   return events as VehicleSpawnEvent[];
