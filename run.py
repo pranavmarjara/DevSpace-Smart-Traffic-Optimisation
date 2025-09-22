@@ -18,4 +18,6 @@ def make_shell_context():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+        print("Database tables created successfully.")
+    print(f"Starting Smart Traffic Management System on port 5000...")
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
