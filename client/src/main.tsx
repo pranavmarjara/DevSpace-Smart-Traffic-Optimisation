@@ -1,5 +1,5 @@
 // Register Web Components for hybrid architecture FIRST
-import "./widgets/register.ts";
+// import "./widgets/register.ts"; // Temporarily disabled during migration
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
