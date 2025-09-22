@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Play, Zap, BarChart3, Loader2, Brain, Settings } from "lucide-react";
+import { Play, Zap, BarChart3, Loader2, Brain, Settings, Database, CheckCircle2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface SimulationMetrics {
@@ -86,6 +86,18 @@ export default function TryUs() {
     epsilon: 0
   });
   const [trainingChartData, setTrainingChartData] = useState<Array<{episode: number, avg_reward: number}>>([]);
+  
+  // Model management state
+  const [models, setModels] = useState<Array<{
+    name: string;
+    size: number;
+    created: number;
+    modified: number;
+    is_active: boolean;
+  }>>([]);
+  const [activeModel, setActiveModel] = useState<string>('dqn.pt');
+  const [newModelName, setNewModelName] = useState<string>('');
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   
   // Hyperparameter state management
@@ -98,6 +110,49 @@ export default function TryUs() {
     replayBufferSize: 10000
   });
   const [currentHyperparams, setCurrentHyperparams] = useState<typeof hyperparams | null>(null);
+  
+  // Load models on component mount
+  useEffect(() => {
+    loadModels();
+  }, []);
+  
+  const loadModels = async () => {
+    setIsLoadingModels(true);
+    try {
+      const response = await fetch('/api/models');
+      if (response.ok) {
+        const data = await response.json();
+        setModels(data.models || []);
+        setActiveModel(data.active_model || 'dqn.pt');
+      }
+    } catch (error) {
+      console.error('Failed to load models:', error);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+  
+  const selectModel = async (modelName: string) => {
+    try {
+      const response = await fetch('/api/use-model', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: modelName }),
+      });
+      
+      if (response.ok) {
+        setActiveModel(modelName);
+        await loadModels(); // Refresh model list
+      } else {
+        alert('Failed to set active model');
+      }
+    } catch (error) {
+      console.error('Failed to select model:', error);
+      alert('Failed to select model');
+    }
+  };
 
   const runSimulation = async (mode: 'hardcoded' | 'optimized') => {
     setIsSimulating(prev => ({ ...prev, [mode]: true }));
@@ -164,13 +219,16 @@ export default function TryUs() {
     setTrainingChartData([]);
     setCurrentHyperparams(hyperparams); // Store current hyperparams for display
     
+    // Use custom model name if provided, otherwise generate timestamped name
+    const modelName = newModelName.trim() || `agent_${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.pt`;
+    
     try {
       const response = await fetch('/api/train', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(hyperparams),
+        body: JSON.stringify({...hyperparams, model_name: modelName}),
       });
 
       if (!response.ok) {
@@ -239,6 +297,10 @@ export default function TryUs() {
                   if (progressData.message) {
                     setTrainingLogs(prev => prev + progressData.message + '\n');
                   }
+                  // Refresh models list after training completes
+                  await loadModels();
+                  // Clear the custom model name field
+                  setNewModelName('');
                 }
                 
                 // Auto-scroll to bottom
@@ -601,6 +663,86 @@ export default function TryUs() {
                 max="100000"
                 step="1000"
               />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Model Manager */}
+      <Card className="mx-auto max-w-4xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="w-5 h-5" />
+            Model Manager
+          </CardTitle>
+          <CardDescription>
+            Manage your trained models and select which one to use for optimization
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Available Models */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground">Available Models</h3>
+              {isLoadingModels ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading models...
+                </div>
+              ) : models.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No trained models found. Train a model to get started.</p>
+              ) : (
+                <div className="space-y-2">
+                  {models.map((model) => (
+                    <div
+                      key={model.name}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        model.is_active
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                      onClick={() => selectModel(model.name)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {model.is_active && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                          <span className="text-sm font-medium">{model.name}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {(model.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Created: {new Date(model.created * 1000).toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Train New Model */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground">Train New Model</h3>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="modelName">Model Name (optional)</Label>
+                  <Input
+                    id="modelName"
+                    placeholder="e.g., agent_v2, rush_hour_model"
+                    value={newModelName}
+                    onChange={(e) => setNewModelName(e.target.value)}
+                    disabled={isTraining}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to auto-generate a timestamped name
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Database className="w-4 h-4" />
+                  <span>Active Model: <strong>{activeModel}</strong></span>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>

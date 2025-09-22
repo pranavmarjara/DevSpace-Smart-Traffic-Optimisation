@@ -2,8 +2,64 @@ from flask import Blueprint, jsonify, request
 from flask_restful import Api, Resource
 # from flask_login import login_required  # Temporarily disabled for migration
 from datetime import datetime
+import os
+import glob
+import re
 
 from models import db, Intersection, Alert, TrafficVolume, MetricSnapshot
+
+# Path for storing active model selection
+ACTIVE_MODEL_FILE = 'models/active_model.txt'
+
+def sanitize_model_name(name: str) -> str:
+    """Sanitize and validate model name to prevent path traversal."""
+    if not name:
+        raise ValueError("Model name cannot be empty")
+    
+    # Remove any path components and keep only filename
+    name = os.path.basename(name)
+    
+    # Validate against safe pattern (alphanumeric, dots, hyphens, underscores)
+    if not re.match(r'^[A-Za-z0-9._-]+$', name):
+        raise ValueError("Model name contains invalid characters")
+    
+    # Ensure .pt extension
+    if not name.endswith('.pt'):
+        name += '.pt'
+    
+    return name
+
+def get_active_model() -> str:
+    """Get the currently active model from persistent storage."""
+    try:
+        if os.path.exists(ACTIVE_MODEL_FILE):
+            with open(ACTIVE_MODEL_FILE, 'r') as f:
+                active_model = f.read().strip()
+                if active_model and os.path.exists(f'models/{active_model}'):
+                    return active_model
+    except Exception:
+        pass
+    
+    # Default fallback
+    if os.path.exists('models/dqn.pt'):
+        return 'dqn.pt'
+    
+    # Find any .pt file as fallback
+    model_files = glob.glob('models/*.pt')
+    if model_files:
+        return os.path.basename(model_files[0])
+    
+    return 'dqn.pt'  # Default even if doesn't exist
+
+def set_active_model(model_name: str) -> bool:
+    """Set the active model in persistent storage."""
+    try:
+        os.makedirs('models', exist_ok=True)
+        with open(ACTIVE_MODEL_FILE, 'w') as f:
+            f.write(model_name)
+        return True
+    except Exception:
+        return False
 
 api_bp = Blueprint('api', __name__)
 api = Api(api_bp)
@@ -129,18 +185,30 @@ class SimulateResource(Resource):
             env = IntersectionEnv()
             
             if mode == 'optimized':
-                # Check if trained model exists
-                if not os.path.exists('models/dqn.pt'):
-                    return {'error': 'model not trained'}, 400
+                # Get the current active model safely
+                active_model = get_active_model()
+                active_model_path = f'models/{active_model}'
+                if not os.path.exists(active_model_path):
+                    return {'error': f'Active model {active_model} not found'}, 400
                 
                 try:
-                    from train_dqn import load_trained_agent
-                    agent = load_trained_agent()
+                    from train_dqn import DQNAgent
+                    from traffic_env import IntersectionEnv
                     
-                    def policy_func(state):
-                        return agent.act(state)
+                    # Load the specific active model
+                    env_for_agent = IntersectionEnv()
+                    agent = DQNAgent(env_for_agent.state_space_size, env_for_agent.action_space_size)
                     
-                    frames = env.run_simulation(steps, policy_func)
+                    if agent.load_model(active_model_path):
+                        agent.epsilon = 0.0  # No exploration during inference
+                        
+                        def policy_func(state):
+                            return agent.act(state)
+                        
+                        frames = env.run_simulation(steps, policy_func)
+                    else:
+                        return {'error': f'Failed to load model {active_model}'}, 500
+                        
                 except Exception as e:
                     return {'error': f'Failed to load model: {str(e)}'}, 500
             else:
@@ -191,8 +259,17 @@ class TrainResource(Resource):
             import json
             from flask import Response
             
+            import time
+            
             # Extract hyperparameters from request body
             data = request.get_json() or {}
+            
+            # Extract and sanitize model name
+            raw_model_name = data.get('model_name', f'agent_{int(time.time())}.pt')
+            try:
+                model_name = sanitize_model_name(raw_model_name)
+            except ValueError as e:
+                return {'error': f'Invalid model name: {str(e)}'}, 400
             
             # Validate and clamp hyperparameters
             episodes = max(100, min(5000, data.get('episodes', 500)))
@@ -208,7 +285,8 @@ class TrainResource(Resource):
                 'gamma': gamma,
                 'epsilon_start': epsilon_start,
                 'epsilon_end': epsilon_end,
-                'replay_buffer_size': replay_buffer_size
+                'replay_buffer_size': replay_buffer_size,
+                'model_name': model_name
             }
             
             def generate_training_updates():
@@ -250,6 +328,80 @@ class TrainResource(Resource):
             }
             return json.dumps(error_response), 500, {'Content-Type': 'application/json'}
 
+class ModelsResource(Resource):
+    """Endpoint to list all available models."""
+    
+    def get(self):
+        """Get list of all trained models in the models/ directory."""
+        try:
+            if not os.path.exists('models'):
+                return {'models': [], 'active_model': None}
+            
+            # Get all .pt files in models directory
+            model_files = glob.glob('models/*.pt')
+            models = []
+            
+            for model_path in model_files:
+                model_name = os.path.basename(model_path)
+                model_stats = os.stat(model_path)
+                
+                models.append({
+                    'name': model_name,
+                    'size': model_stats.st_size,
+                    'created': model_stats.st_ctime,
+                    'modified': model_stats.st_mtime,
+                    'is_active': model_name == get_active_model()
+                })
+            
+            # Sort by creation time (newest first)
+            models.sort(key=lambda x: x['created'], reverse=True)
+            
+            return {
+                'models': models,
+                'active_model': get_active_model()
+            }
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+class UseModelResource(Resource):
+    """Endpoint to set the active model."""
+    
+    def post(self):
+        """Set the active model for optimized simulations."""
+        try:
+            data = request.get_json() or {}
+            raw_model_name = data.get('name')
+            
+            if not raw_model_name:
+                return {'error': 'Model name is required'}, 400
+            
+            # Sanitize model name
+            try:
+                model_name = sanitize_model_name(raw_model_name)
+            except ValueError as e:
+                return {'error': f'Invalid model name: {str(e)}'}, 400
+            
+            model_path = f'models/{model_name}'
+            
+            if not os.path.exists(model_path):
+                return {'error': f'Model {model_name} not found'}, 404
+            
+            # Update active model persistently
+            if not set_active_model(model_name):
+                return {'error': 'Failed to set active model'}, 500
+            
+            return {
+                'success': True,
+                'active_model': model_name,
+                'message': f'Active model set to {model_name}'
+            }
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
+
 # Register the endpoints
 api.add_resource(SimulateResource, '/simulate')
 api.add_resource(TrainResource, '/train')
+api.add_resource(ModelsResource, '/models')
+api.add_resource(UseModelResource, '/use-model')

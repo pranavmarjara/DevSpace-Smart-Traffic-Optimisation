@@ -203,7 +203,8 @@ def train_dqn_agent(episodes: int = 500, learning_rate: float = 0.001,
 
 def train_dqn_agent_generator(episodes: int = 500, learning_rate: float = 0.001, 
                               gamma: float = 0.99, epsilon_start: float = 1.0, 
-                              epsilon_end: float = 0.1, replay_buffer_size: int = 10000):
+                              epsilon_end: float = 0.1, replay_buffer_size: int = 10000,
+                              model_name: str = 'dqn.pt'):
     """Generator version of train_dqn_agent that yields progress updates."""
     env = IntersectionEnv()
     agent = DQNAgent(env.state_space_size, env.action_space_size, 
@@ -267,16 +268,18 @@ def train_dqn_agent_generator(episodes: int = 500, learning_rate: float = 0.001,
             
             yield progress_data
     
-    # Save the trained model
+    # Save the trained model with custom name
     os.makedirs('models', exist_ok=True)
-    agent.save_model('models/dqn.pt')
+    model_path = f'models/{model_name}'
+    agent.save_model(model_path)
     
     # Final completion message
     yield {
         'episode': episodes,
         'total_episodes': episodes,
         'completed': True,
-        'message': 'Training completed! Model saved.'
+        'message': f'Training completed! Model saved as {model_name}',
+        'model_name': model_name
     }
     
     return agent
