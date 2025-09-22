@@ -79,6 +79,12 @@ export default function AnimatedIntersection({
   const [phaseTimer, setPhaseTimer] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   
+  // Validate and ensure signal timings are within realistic bounds (30-45s)
+  const validatedSignalTimings = {
+    northSouth: Math.max(30, Math.min(45, intersection.signalTimings.northSouth)),
+    eastWest: Math.max(30, Math.min(45, intersection.signalTimings.eastWest))
+  };
+  
   const vehicleIdCounter = useRef(0);
   const animationRef = useRef<number>();
 
@@ -87,7 +93,7 @@ export default function AnimatedIntersection({
     const timer = setInterval(() => {
       setPhaseTimer(prev => {
         const newTimer = prev + 1;
-        const currentDuration = currentPhase === 'ns' ? intersection.signalTimings.northSouth : intersection.signalTimings.eastWest;
+        const currentDuration = currentPhase === 'ns' ? validatedSignalTimings.northSouth : validatedSignalTimings.eastWest;
         
         // Yellow light phase (last 3 seconds)
         if (newTimer >= currentDuration - 3 && !isTransitioning) {
@@ -134,7 +140,7 @@ export default function AnimatedIntersection({
     }, 1000); // 1 second intervals for realistic timing
 
     return () => clearInterval(timer);
-  }, [currentPhase, intersection.signalTimings, isTransitioning]);
+  }, [currentPhase, validatedSignalTimings, isTransitioning]);
 
   // Vehicle spawning logic
   useEffect(() => {
@@ -165,30 +171,37 @@ export default function AnimatedIntersection({
     return () => clearInterval(spawnInterval);
   }, []);
 
-  // Vehicle movement animation
+  // Vehicle movement animation with performance optimization
   useEffect(() => {
+    let frameCount = 0;
     const animate = () => {
+      frameCount++;
+      // Only update React state every 4 frames (15fps instead of 60fps)
+      if (frameCount % 4 !== 0) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
       setVehicles(prevVehicles => {
         return prevVehicles.map(vehicle => {
-          const canMove = vehicle.status === 'approaching' || 
-                         (vehicle.status === 'waiting' && 
-                          ((vehicle.direction === 'north' || vehicle.direction === 'south') && 
-                           trafficLights[vehicle.direction] === 'green')) ||
-                         (vehicle.status === 'waiting' && 
-                          ((vehicle.direction === 'east' || vehicle.direction === 'west') && 
-                           trafficLights[vehicle.direction] === 'green'));
-
-          if (!canMove && vehicle.status === 'approaching') {
-            // Check if vehicle should stop at intersection
+          // Check if vehicle should stop at intersection
+          if (vehicle.status === 'approaching') {
             const distanceToIntersection = Math.sqrt(
               Math.pow(vehicle.targetX - vehicle.x, 2) + 
               Math.pow(vehicle.targetY - vehicle.y, 2)
             );
             
-            if (distanceToIntersection < 20 && trafficLights[vehicle.direction] !== 'green') {
+            // If close to intersection and light is not green, stop and wait
+            if (distanceToIntersection < 25 && trafficLights[vehicle.direction] !== 'green') {
               return { ...vehicle, status: 'waiting' };
             }
           }
+
+          // Determine if vehicle can move based on status and traffic light
+          const canMove = vehicle.status === 'approaching' || 
+                         vehicle.status === 'moving' ||
+                         vehicle.status === 'exiting' ||
+                         (vehicle.status === 'waiting' && trafficLights[vehicle.direction] === 'green');
 
           if (canMove || vehicle.status === 'moving' || vehicle.status === 'exiting') {
             const dx = vehicle.targetX - vehicle.x;
