@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Play, Zap, BarChart3, Loader2 } from "lucide-react";
+import { Play, Zap, BarChart3, Loader2, Brain } from "lucide-react";
 
 interface SimulationMetrics {
   mode: string;
@@ -66,6 +66,13 @@ export default function TryUs() {
     hardcoded: { playing: false, frame: 0, cars: [] },
     optimized: { playing: false, frame: 0, cars: [] }
   });
+  
+  // Training state management
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainingLogs, setTrainingLogs] = useState('');
+  const [trainingComplete, setTrainingComplete] = useState(false);
+  const [trainingError, setTrainingError] = useState<string | null>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
   const runSimulation = async (mode: 'hardcoded' | 'optimized') => {
     setIsSimulating(prev => ({ ...prev, [mode]: true }));
@@ -113,6 +120,73 @@ export default function TryUs() {
       runSimulation('hardcoded'),
       runSimulation('optimized')
     ]);
+  };
+
+  const runTraining = async () => {
+    setIsTraining(true);
+    setTrainingLogs('');
+    setTrainingComplete(false);
+    setTrainingError(null);
+    
+    try {
+      const response = await fetch('/api/train', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Handle streaming text response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (reader) {
+        let buffer = '';
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Split by lines and process complete lines
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              setTrainingLogs(prev => prev + line + '\n');
+              // Auto-scroll to bottom
+              setTimeout(() => {
+                logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+              }, 100);
+            }
+          }
+        }
+        
+        // Process any remaining buffer
+        if (buffer.trim()) {
+          setTrainingLogs(prev => prev + buffer + '\n');
+        }
+      } else {
+        // Fallback for browsers that don't support streaming
+        const text = await response.text();
+        setTrainingLogs(text);
+      }
+      
+      setTrainingComplete(true);
+      setTrainingError(null);
+    } catch (error) {
+      console.error('Training failed:', error);
+      setTrainingError(`Training failed: ${error}`);
+    } finally {
+      setIsTraining(false);
+    }
   };
 
   const visualizeSimulation = (frames: SimulationFrame[], mode: 'hardcoded' | 'optimized') => {
@@ -350,8 +424,22 @@ export default function TryUs() {
       {/* Control Buttons */}
       <div className="flex justify-center gap-4">
         <Button
+          onClick={runTraining}
+          disabled={isTraining || isSimulating.hardcoded || isSimulating.optimized}
+          variant="secondary"
+          size="lg"
+        >
+          {isTraining ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Brain className="w-4 h-4 mr-2" />
+          )}
+          Train Agent
+        </Button>
+        
+        <Button
           onClick={() => runSimulation('hardcoded')}
-          disabled={isSimulating.hardcoded}
+          disabled={isTraining || isSimulating.hardcoded}
           variant="outline"
           size="lg"
         >
@@ -365,7 +453,7 @@ export default function TryUs() {
         
         <Button
           onClick={() => runSimulation('optimized')}
-          disabled={isSimulating.optimized}
+          disabled={isTraining || isSimulating.optimized}
           variant="outline"
           size="lg"
         >
@@ -379,7 +467,7 @@ export default function TryUs() {
         
         <Button
           onClick={runComparison}
-          disabled={isSimulating.hardcoded || isSimulating.optimized}
+          disabled={isTraining || isSimulating.hardcoded || isSimulating.optimized}
           variant="default"
           size="lg"
         >
@@ -387,6 +475,50 @@ export default function TryUs() {
           Compare
         </Button>
       </div>
+
+      {/* Training Logs Display */}
+      {(isTraining || trainingLogs || trainingComplete || trainingError) && (
+        <Card className="mx-auto max-w-4xl">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="w-5 h-5" />
+              Agent Training
+              {isTraining && <Loader2 className="w-4 h-4 animate-spin" />}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {trainingError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-red-700 font-medium">Training Failed</p>
+                <p className="text-red-600 text-sm">{trainingError}</p>
+              </div>
+            )}
+            
+            {trainingComplete && !trainingError && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                <p className="text-green-700 font-medium">✅ Training Complete! Model saved.</p>
+                <p className="text-green-600 text-sm">You can now use "Optimize Now" and "Compare" with the trained model.</p>
+              </div>
+            )}
+            
+            {(trainingLogs || isTraining) && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm text-muted-foreground">Training Progress:</h4>
+                <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-sm max-h-96 overflow-y-auto">
+                  <pre className="whitespace-pre-wrap">{trainingLogs}</pre>
+                  {isTraining && (
+                    <div className="flex items-center gap-2 mt-2 text-blue-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Training in progress...
+                    </div>
+                  )}
+                  <div ref={logsEndRef} />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dual Canvas Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
