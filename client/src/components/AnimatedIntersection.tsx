@@ -414,6 +414,33 @@ export default function AnimatedIntersection({
     };
   }, [trafficLights]);
 
+  // Calculate remaining time for each direction
+  const calculateRemainingTime = (direction: keyof TrafficLightState): number => {
+    const currentDuration = currentPhase === 'ns' ? validatedSignalTimings.northSouth : validatedSignalTimings.eastWest;
+    
+    if ((direction === 'north' || direction === 'south') && currentPhase === 'ns') {
+      // NS is currently active
+      if (trafficLights[direction] === 'green') {
+        return Math.max(0, currentDuration - 3 - phaseTimer); // Time until yellow
+      } else if (trafficLights[direction] === 'yellow') {
+        return Math.max(0, 3 - (phaseTimer - (currentDuration - 3))); // Yellow countdown
+      }
+    } else if ((direction === 'east' || direction === 'west') && currentPhase === 'ew') {
+      // EW is currently active
+      if (trafficLights[direction] === 'green') {
+        return Math.max(0, currentDuration - 3 - phaseTimer); // Time until yellow
+      } else if (trafficLights[direction] === 'yellow') {
+        return Math.max(0, 3 - (phaseTimer - (currentDuration - 3))); // Yellow countdown
+      }
+    } else {
+      // Direction is red, show time until their turn
+      const remainingCurrentPhase = Math.max(0, currentDuration - phaseTimer);
+      const nextPhaseDuration = currentPhase === 'ns' ? validatedSignalTimings.eastWest : validatedSignalTimings.northSouth;
+      return remainingCurrentPhase;
+    }
+    return 0;
+  };
+
   const TrafficLight = ({ 
     direction, 
     x, 
@@ -422,42 +449,72 @@ export default function AnimatedIntersection({
     direction: keyof TrafficLightState; 
     x: number; 
     y: number; 
-  }) => (
-    <g transform={`translate(${x}, ${y})`}>
-      {/* Traffic light pole */}
-      <rect x="-2" y="0" width="4" height="30" fill="#666" />
-      
-      {/* Traffic light housing */}
-      <rect x="-8" y="-24" width="16" height="24" rx="2" fill="#333" />
-      
-      {/* Red light */}
-      <circle 
-        cx="0" 
-        cy="-18" 
-        r="4" 
-        fill={trafficLights[direction] === 'red' ? '#ef4444' : '#7f1d1d'}
-        opacity={trafficLights[direction] === 'red' ? 1 : 0.3}
-      />
-      
-      {/* Yellow light */}
-      <circle 
-        cx="0" 
-        cy="-12" 
-        r="4" 
-        fill={trafficLights[direction] === 'yellow' ? '#eab308' : '#713f12'}
-        opacity={trafficLights[direction] === 'yellow' ? 1 : 0.3}
-      />
-      
-      {/* Green light */}
-      <circle 
-        cx="0" 
-        cy="-6" 
-        r="4" 
-        fill={trafficLights[direction] === 'green' ? '#10b981' : '#064e3b'}
-        opacity={trafficLights[direction] === 'green' ? 1 : 0.3}
-      />
-    </g>
-  );
+  }) => {
+    const remainingTime = calculateRemainingTime(direction);
+    
+    return (
+      <g transform={`translate(${x}, ${y})`}>
+        {/* Traffic light pole */}
+        <rect x="-2" y="0" width="4" height="30" fill="#666" />
+        
+        {/* Traffic light housing */}
+        <rect x="-8" y="-24" width="16" height="24" rx="2" fill="#333" />
+        
+        {/* Red light */}
+        <circle 
+          cx="0" 
+          cy="-18" 
+          r="4" 
+          fill={trafficLights[direction] === 'red' ? '#ef4444' : '#7f1d1d'}
+          opacity={trafficLights[direction] === 'red' ? 1 : 0.3}
+        />
+        
+        {/* Yellow light */}
+        <circle 
+          cx="0" 
+          cy="-12" 
+          r="4" 
+          fill={trafficLights[direction] === 'yellow' ? '#eab308' : '#713f12'}
+          opacity={trafficLights[direction] === 'yellow' ? 1 : 0.3}
+        />
+        
+        {/* Green light */}
+        <circle 
+          cx="0" 
+          cy="-6" 
+          r="4" 
+          fill={trafficLights[direction] === 'green' ? '#10b981' : '#064e3b'}
+          opacity={trafficLights[direction] === 'green' ? 1 : 0.3}
+        />
+        
+        {/* Countdown timer */}
+        <g transform="translate(20, -12)">
+          {/* Timer background */}
+          <rect 
+            x="-8" 
+            y="-8" 
+            width="16" 
+            height="16" 
+            rx="2" 
+            fill="rgba(0, 0, 0, 0.8)" 
+            stroke="#fff" 
+            strokeWidth="1"
+          />
+          {/* Timer text */}
+          <text 
+            x="0" 
+            y="2" 
+            textAnchor="middle" 
+            fill="white" 
+            fontSize="10" 
+            fontWeight="bold"
+          >
+            {Math.ceil(remainingTime)}
+          </text>
+        </g>
+      </g>
+    );
+  };
 
   return (
     <Card 
@@ -613,9 +670,12 @@ export default function AnimatedIntersection({
             ))}
           </svg>
 
-          {/* Timer display */}
+          {/* Enhanced timer display with queue info */}
           <div className="absolute top-2 right-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-xs">
-            Phase: {currentPhase.toUpperCase()} | Timer: {phaseTimer}s
+            <div>Phase: {currentPhase.toUpperCase()} | Timer: {phaseTimer}s</div>
+            <div className="text-xs opacity-75">
+              Vehicles: {vehicles.length} | Status: {intersection.status}
+            </div>
           </div>
         </div>
       </div>
