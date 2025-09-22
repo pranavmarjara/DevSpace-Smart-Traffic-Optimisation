@@ -280,19 +280,19 @@ export default function TryUs() {
       // Run simulation timer
       simulationTimerRef.current = setInterval(() => {
         setSimulationTime(prev => {
-          const newTime = prev + 1;
-          // Stop at 90 seconds
-          if (newTime >= 90) {
+          const newTime = prev + 0.1; // Update every 100ms for smoother timing
+          // Stop at 10 seconds
+          if (newTime >= 10) {
             if (simulationTimerRef.current) {
               clearInterval(simulationTimerRef.current);
               simulationTimerRef.current = null;
             }
             setIsRunningDemo(false);
-            return 90;
+            return 10;
           }
           return newTime;
         });
-      }, 1000); // Update every second
+      }, 100); // Update every 100ms for smoother animation
     }
   };
   
