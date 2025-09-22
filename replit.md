@@ -69,7 +69,18 @@ Preferred communication style: Simple, everyday language.
 - **CSS Processing**: PostCSS with Tailwind CSS and Autoprefixer
 
 ### Server Configuration
-- **Production Server**: Configured for Gunicorn deployment
-- **Static Files**: Flask serves React build from dist/public directory
+- **Production Server**: Configured for Gunicorn deployment with uv package manager
+- **Static Files**: Flask serves React build from dist/public directory  
 - **API Routing**: Separate API blueprint mounted at /api prefix
-- **Environment Variables**: DATABASE_URL and SECRET_KEY configuration required
+- **Environment Variables**: DATABASE_URL and SECRET_KEY configuration configured
+- **Database**: PostgreSQL database provisioned and initialized
+- **Build Process**: Vite builds React frontend to dist/public, Flask serves as static files
+
+### Recent Setup Changes (September 22, 2025)
+- Migrated from development stack to production-ready Flask + React architecture
+- Configured uv Python package manager for dependency management
+- Set up PostgreSQL database with environment variables
+- Updated build process to use Vite for React frontend compilation
+- Configured Gunicorn with proper host binding for Replit environment
+- Fixed TypeScript path mappings for proper module resolution
+- Established workflow for serving combined Flask backend + React frontend on port 5000
