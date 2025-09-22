@@ -81,10 +81,20 @@ interface Car {
 interface SimulationFrame {
   cars: Car[];
   lights: {
-    N: string;
-    S: string;
-    E: string;
-    W: string;
+    N: { color: string; remaining: number };
+    S: { color: string; remaining: number };
+    E: { color: string; remaining: number };
+    W: { color: string; remaining: number };
+  };
+  phase: string;
+  phase_remaining: number;
+  phase_duration: number;
+  step_duration_sec: number;
+  queues: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
   };
   metrics: {
     cars_processed: number;
@@ -99,6 +109,7 @@ interface SimulationFrame {
 interface SimulationResult {
   frames: SimulationFrame[];
   metrics: SimulationMetrics;
+  step_duration_sec: number;
 }
 
 interface InterpolatedCar extends Car {
@@ -634,17 +645,50 @@ export default function TryUs() {
       ctx.stroke();
     };
     
-    // Traffic lights at corners
-    drawGlowingLight(centerX, centerY - lightOffset, '#22c55e', frame.lights.N === 'green');
-    drawGlowingLight(centerX, centerY + lightOffset, '#22c55e', frame.lights.S === 'green');
-    drawGlowingLight(centerX + lightOffset, centerY, '#22c55e', frame.lights.E === 'green');
-    drawGlowingLight(centerX - lightOffset, centerY, '#22c55e', frame.lights.W === 'green');
+    // Traffic lights at corners with colors based on new structure
+    const lightColorMap = {
+      'green': '#22c55e',
+      'yellow': '#eab308',
+      'red': '#ef4444'
+    };
     
-    // Draw red lights over green positions if red
-    drawGlowingLight(centerX, centerY - lightOffset, '#ef4444', frame.lights.N === 'red');
-    drawGlowingLight(centerX, centerY + lightOffset, '#ef4444', frame.lights.S === 'red');
-    drawGlowingLight(centerX + lightOffset, centerY, '#ef4444', frame.lights.E === 'red');
-    drawGlowingLight(centerX - lightOffset, centerY, '#ef4444', frame.lights.W === 'red');
+    // Draw traffic lights with correct colors
+    drawGlowingLight(centerX, centerY - lightOffset, lightColorMap[frame.lights.N.color as keyof typeof lightColorMap], true);
+    drawGlowingLight(centerX, centerY + lightOffset, lightColorMap[frame.lights.S.color as keyof typeof lightColorMap], true);
+    drawGlowingLight(centerX + lightOffset, centerY, lightColorMap[frame.lights.E.color as keyof typeof lightColorMap], true);
+    drawGlowingLight(centerX - lightOffset, centerY, lightColorMap[frame.lights.W.color as keyof typeof lightColorMap], true);
+    
+    // Draw countdown timers next to each light
+    const drawCountdownTimer = (x: number, y: number, remaining: number, direction: string) => {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Draw background for better readability
+      const text = Math.ceil(remaining).toString();
+      const metrics = ctx.measureText(text);
+      const padding = 4;
+      
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(
+        x - metrics.width/2 - padding, 
+        y - 7 - padding, 
+        metrics.width + padding*2, 
+        14 + padding*2
+      );
+      
+      // Draw timer text
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(text, x, y);
+    };
+    
+    // Position timers next to lights
+    const timerOffset = 25;
+    drawCountdownTimer(centerX, centerY - lightOffset - timerOffset, frame.lights.N.remaining, 'N');
+    drawCountdownTimer(centerX, centerY + lightOffset + timerOffset, frame.lights.S.remaining, 'S');
+    drawCountdownTimer(centerX + lightOffset + timerOffset, centerY, frame.lights.E.remaining, 'E');
+    drawCountdownTimer(centerX - lightOffset - timerOffset, centerY, frame.lights.W.remaining, 'W');
   };
 
   const initializeCanvas = useCallback((canvas: HTMLCanvasElement, mode: string) => {
@@ -652,7 +696,17 @@ export default function TryUs() {
     if (ctx) {
       drawFrame(ctx, {
         cars: [],
-        lights: { N: 'red', S: 'red', E: 'green', W: 'green' },
+        lights: { 
+          N: { color: 'red', remaining: 0 }, 
+          S: { color: 'red', remaining: 0 }, 
+          E: { color: 'green', remaining: 30 }, 
+          W: { color: 'green', remaining: 30 } 
+        },
+        phase: 'ew',
+        phase_remaining: 30,
+        phase_duration: 30,
+        step_duration_sec: 1,
+        queues: { north: 0, south: 0, east: 0, west: 0 },
         metrics: { cars_processed: 0, avg_waiting_time: 0, avg_queue_length: 0, total_cars: 0, time_wasted: 0 },
         step: 0
       }, canvas.width, canvas.height, mode);
